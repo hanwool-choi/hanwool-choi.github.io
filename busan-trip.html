@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>솨♥울 함께 떠나는 부산여행</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --text:#171a20; --muted:#5b6472;
+    --accent:#1c56cf; --accent-ink:#12419f; --accent-soft:#e8eefc;
+    --line:#e3e7ee; --shadow:0 10px 30px rgba(23,42,84,.08);
+    --radius:14px;
+  }
+  [data-theme="dark"]{
+    --bg:#0f1217; --surface:#161b23; --text:#e9edf3; --muted:#98a2b3;
+    --accent:#6d9bff; --accent-ink:#9db9ff; --accent-soft:#1c2b4d;
+    --line:#252c38; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1217; --surface:#161b23; --text:#e9edf3; --muted:#98a2b3;
+      --accent:#6d9bff; --accent-ink:#9db9ff; --accent-soft:#1c2b4d;
+      --line:#252c38; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{animation:none!important; transition:none!important}
+  }
+  body{
+    font-family:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--text);
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  img{max-width:100%; display:block}
+  .wrap{max-width:1120px; margin:0 auto; padding:0 20px}
+
+  /* ---------- nav ---------- */
+  .nav{
+    position:sticky; top:0; z-index:50; height:64px;
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .nav .wrap{height:100%; display:flex; align-items:center; gap:8px}
+  .nav .brand{font-weight:800; font-size:15px; letter-spacing:-.01em; text-decoration:none; margin-right:auto; white-space:nowrap}
+  .nav .brand b{color:var(--accent)}
+  .nav a.daylink{
+    text-decoration:none; font-size:13.5px; font-weight:600; color:var(--muted);
+    padding:7px 12px; border-radius:999px; white-space:nowrap;
+    transition:background .2s,color .2s;
+  }
+  .nav a.daylink:hover{background:var(--accent-soft); color:var(--accent-ink)}
+  .theme-btn{
+    border:1px solid var(--line); background:var(--surface); color:var(--text);
+    width:34px; height:34px; border-radius:999px; cursor:pointer; font-size:15px;
+    display:grid; place-items:center; transition:transform .15s;
+  }
+  .theme-btn:active{transform:scale(.94)}
+  @media (max-width:720px){ .nav a.daylink{display:none} }
+
+  /* ---------- hero ---------- */
+  .hero{padding:56px 0 64px}
+  .hero .grid{display:grid; grid-template-columns:6fr 5fr; gap:48px; align-items:center}
+  .eyebrow{
+    font-size:12.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:18px;
+  }
+  .hero h1{
+    font-size:clamp(34px,5.2vw,58px); line-height:1.12; letter-spacing:-.035em; font-weight:800;
+  }
+  .hero h1 .hearts{color:var(--accent)}
+  .hero p.sub{margin-top:18px; font-size:17px; color:var(--muted); max-width:34ch}
+  .hero .meta{margin-top:28px; display:flex; flex-wrap:wrap; gap:10px}
+  .pill{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--surface); border:1px solid var(--line); border-radius:999px;
+    padding:8px 15px; font-size:13.5px; font-weight:600;
+  }
+  .pill strong{color:var(--accent); font-weight:800}
+  .hero figure{
+    border-radius:var(--radius); overflow:hidden; position:relative;
+    aspect-ratio:4/5; background:var(--accent-soft); box-shadow:var(--shadow);
+  }
+  .hero figure img{width:100%; height:100%; object-fit:cover; filter:saturate(.85)}
+  .hero figure::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(200deg, rgba(28,86,207,.18), rgba(15,26,54,.32) 90%);
+  }
+  .hero figcaption{
+    position:absolute; left:16px; bottom:14px; z-index:2; color:#fff;
+    font-size:13px; font-weight:600; text-shadow:0 1px 8px rgba(0,0,0,.45);
+  }
+  @media (max-width:860px){
+    .hero .grid{grid-template-columns:1fr; gap:32px}
+    .hero figure{aspect-ratio:16/10}
+  }
+
+  /* ---------- overview bento ---------- */
+  .overview{padding:8px 0 72px}
+  .overview h2{font-size:clamp(22px,3vw,30px); letter-spacing:-.02em; font-weight:800; margin-bottom:24px}
+  .bento{display:grid; grid-template-columns:repeat(12,1fr); gap:14px}
+  .cell{
+    border-radius:var(--radius); border:1px solid var(--line); background:var(--surface);
+    padding:24px; position:relative; overflow:hidden; text-decoration:none;
+    display:flex; flex-direction:column; justify-content:flex-end; min-height:170px;
+    transition:transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s;
+  }
+  .cell:hover{transform:translateY(-3px); box-shadow:var(--shadow)}
+  .cell .dayno{
+    font-size:13px; font-weight:800; color:var(--accent);
+    margin-bottom:auto; font-variant-numeric:tabular-nums;
+  }
+  .cell h3{font-size:19px; font-weight:800; letter-spacing:-.02em; margin-top:22px}
+  .cell p{font-size:13.5px; color:var(--muted); margin-top:6px}
+  .cell.c1{grid-column:span 7}
+  .cell.c2{grid-column:span 5}
+  .cell.c3{grid-column:span 5}
+  .cell.c4{grid-column:span 7}
+  .cell.img{color:#fff; border:none}
+  .cell.img .dayno{color:#cfe0ff}
+  .cell.img p{color:rgba(255,255,255,.82)}
+  .cell.img > img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:saturate(.85)}
+  .cell.img::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(185deg, rgba(16,30,64,.18) 30%, rgba(10,20,46,.72));
+  }
+  .cell.img *{position:relative; z-index:2}
+  .cell.tint{background:var(--accent-soft); border-color:transparent}
+  @media (max-width:720px){ .cell{grid-column:span 12 !important} }
+
+  /* ---------- day sections ---------- */
+  .day{padding:64px 0; border-top:1px solid var(--line)}
+  .dayhead{display:flex; align-items:baseline; gap:18px; flex-wrap:wrap; margin-bottom:8px}
+  .dayhead .n{
+    font-size:clamp(44px,6vw,64px); font-weight:800; letter-spacing:-.04em;
+    color:var(--accent); line-height:1; font-variant-numeric:tabular-nums;
+  }
+  .dayhead h2{font-size:clamp(24px,3.4vw,34px); font-weight:800; letter-spacing:-.025em}
+  .dayhead .date{font-size:15px; font-weight:600; color:var(--muted)}
+  .day p.daysub{color:var(--muted); font-size:15px; margin-bottom:36px; max-width:60ch}
+
+  .timeline{position:relative; display:grid; gap:0}
+  .slot{
+    display:grid; grid-template-columns:112px 1fr; gap:24px;
+    padding:22px 0; border-top:1px solid var(--line);
+  }
+  .slot:first-child{border-top:none}
+  .slot .time{
+    font-size:14px; font-weight:800; color:var(--accent-ink);
+    font-variant-numeric:tabular-nums; padding-top:2px; white-space:nowrap;
+  }
+  .slot h4{font-size:17px; font-weight:750; letter-spacing:-.015em}
+  .slot .desc{font-size:14.5px; color:var(--muted); margin-top:4px}
+  .slot .desc b{color:var(--text); font-weight:650}
+  .links{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; text-decoration:none;
+    background:var(--accent-soft); color:var(--accent-ink);
+    border-radius:999px; padding:6px 13px; font-size:13px; font-weight:700;
+    transition:filter .15s, transform .15s;
+  }
+  .chip:hover{filter:brightness(.94)}
+  .chip:active{transform:scale(.97)}
+  .chip svg{width:12px; height:12px; flex:none}
+  .note{
+    margin-top:12px; font-size:13px; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    padding:10px 14px; display:inline-block;
+  }
+  .note b{color:var(--text); font-weight:700}
+  @media (max-width:640px){
+    .slot{grid-template-columns:1fr; gap:6px}
+    .slot .time{padding-top:0}
+  }
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line); padding:48px 0 72px; text-align:left}
+  footer .wrap{display:flex; flex-wrap:wrap; align-items:center; gap:16px; justify-content:space-between}
+  footer .t{font-weight:800; font-size:16px}
+  footer .t b{color:var(--accent)}
+  footer a.sheet{
+    text-decoration:none; font-size:14px; font-weight:700; color:var(--accent-ink);
+    background:var(--accent-soft); padding:10px 18px; border-radius:999px;
+    transition:filter .15s;
+  }
+  footer a.sheet:hover{filter:brightness(.94)}
+
+  /* ---------- reveal ---------- */
+  .reveal{opacity:0; transform:translateY(18px); transition:opacity .6s cubic-bezier(.16,1,.3,1), transform .6s cubic-bezier(.16,1,.3,1)}
+  .reveal.in{opacity:1; transform:none}
+  @media (prefers-reduced-motion: reduce){ .reveal{opacity:1; transform:none} }
+
+  @media print{
+    .nav,.theme-btn,footer a.sheet{display:none}
+    .day{padding:24px 0}
+    body{background:#fff; color:#000}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">솨<b>♥</b>울 부산여행</a>
+    <a class="daylink" href="#day1">Day 1 영도</a>
+    <a class="daylink" href="#day2">Day 2 해운대</a>
+    <a class="daylink" href="#day3">Day 3 호캉스</a>
+    <a class="daylink" href="#day4">Day 4 서면</a>
+    <button class="theme-btn" id="themeBtn" aria-label="라이트/다크 모드 전환">◐</button>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="wrap grid">
+      <div>
+        <p class="eyebrow">2026. 7. 26 ~ 7. 29 · 3박 4일</p>
+        <h1>솨<span class="hearts">♥</span>울,<br>함께 떠나는 부산</h1>
+        <p class="sub">영도의 바다부터 광안리 야경, 호캉스까지. 우리 둘의 여름 일정표.</p>
+        <div class="meta">
+          <span class="pill"><strong>Day 1</strong> 영도</span>
+          <span class="pill"><strong>Day 2</strong> 해운대 + 광안리</span>
+          <span class="pill"><strong>Day 3</strong> 롯데호텔 호캉스</span>
+          <span class="pill"><strong>Day 4</strong> 서면 + 전포</span>
+        </div>
+      </div>
+      <figure>
+        <!-- TODO: 두 분의 부산 사진으로 교체하면 더 좋아요 -->
+        <img src="https://picsum.photos/seed/busan-summer-sea/900/1125" alt="여름 바다 풍경" loading="eager">
+        <figcaption>여름의 부산, 우리 둘</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="overview">
+    <div class="wrap">
+      <h2>한눈에 보는 나흘</h2>
+      <div class="bento">
+        <a class="cell c1 img reveal" href="#day1">
+          <img src="https://picsum.photos/seed/yeongdo-coast-walk/1000/500" alt="" decoding="async">
+          <span class="dayno">DAY 1 · 7/26 일</span>
+          <h3>영도</h3>
+          <p>흰여울문화마을, 신기산업 카페, 다대포 노을, 초필살 돼지구이</p>
+        </a>
+        <a class="cell c2 tint reveal" href="#day2">
+          <span class="dayno">DAY 2 · 7/27 월</span>
+          <h3>해운대 + 광안리</h3>
+          <p>달맞이길 브런치, 루지, 웨이브온, 밀락더마켓</p>
+        </a>
+        <a class="cell c3 reveal" href="#day3">
+          <span class="dayno">DAY 3 · 7/28 화</span>
+          <h3>롯데호텔 호캉스</h3>
+          <p>전포 점심, 수영과 휴식, 백화점 구경, 저녁엔 바</p>
+        </a>
+        <a class="cell c4 img reveal" href="#day4">
+          <img src="https://picsum.photos/seed/seomyeon-cafe-street/1000/500" alt="" decoding="async">
+          <span class="dayno">DAY 4 · 7/29 수</span>
+          <h3>서면 + 전포, 그리고 복귀</h3>
+          <p>전포 편집샵과 카페 투어 후 집으로</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="day" id="day1">
+    <div class="wrap">
+      <div class="dayhead">
+        <span class="n">01</span>
+        <h2>영도</h2>
+        <span class="date">7월 26일 일요일</span>
+      </div>
+      <p class="daysub">부산 고고. 커피 사들고 출발해서 영도 바다와 다대포 노을까지 꽉 채우는 첫날.</p>
+      <div class="timeline">
+        <div class="slot reveal">
+          <div class="time">09:30 ~ 11:00</div>
+          <div>
+            <h4>출발</h4>
+            <p class="desc">커피 사들고 출발. 중간 휴게소에서 간단하게 아침 겸 점심.</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">14:00 도착</div>
+          <div>
+            <h4>국밥으로 점심</h4>
+            <p class="desc">부산 도착하자마자 국밥 한 그릇. 만두는 포장해 가기.</p>
+            <div class="links">
+              <a class="chip" href="https://naver.me/5HkagIN6" target="_blank" rel="noopener">국밥 후보 1<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/5LHMPOow" target="_blank" rel="noopener">국밥 후보 2<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/Gsj2ze7y" target="_blank" rel="noopener">만두 포장<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">14:00 ~ 16:00</div>
+          <div>
+            <h4>흰여울문화마을 + 신기산업 카페</h4>
+            <p class="desc">절영해안 골목 산책 후 뷰 좋은 신기산업 카페에서 쉬어가기.</p>
+            <p class="note"><b>주차</b> 신선3동 공영주차장 또는 절영해안산책로 앞 주차장</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">16:00 ~ 18:00</div>
+          <div>
+            <h4>영도 편집샵 + 모모스커피 영도점</h4>
+            <p class="desc">편집샵 구경하고 모모스커피 들르기.</p>
+            <p class="note"><b>주차</b> 모모스커피 방문 시 영도점 주차장을 내비에 찍고 가기</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">노을 무렵</div>
+          <div>
+            <h4>다대포해수욕장</h4>
+            <p class="desc">노을 맛집에서 하루 마무리 전 바다 한 번 더.</p>
+            <p class="note"><b>주차</b> 다대포 낙조분수 광장 공영주차장</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">18:00 ~ 20:00</div>
+          <div>
+            <h4>신라스테이 서부산 체크인 + 휴식</h4>
+            <p class="desc">짐 풀고 잠깐 쉬었다가 저녁 먹으러 출발.</p>
+            <div class="links">
+              <a class="chip" href="https://naver.me/xTT6naaC" target="_blank" rel="noopener">신라스테이 서부산<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">20:00</div>
+          <div>
+            <h4>저녁, 초필살 돼지구이 명지점</h4>
+            <div class="links">
+              <a class="chip" href="https://naver.me/GM3nkS06" target="_blank" rel="noopener">초필살 돼지구이<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="day" id="day2">
+    <div class="wrap">
+      <div class="dayhead">
+        <span class="n">02</span>
+        <h2>해운대 + 광안리</h2>
+        <span class="date">7월 27일 월요일</span>
+      </div>
+      <p class="daysub">브런치로 느긋하게 시작해서 루지로 신나게, 광안대교 야경으로 마무리.</p>
+      <div class="timeline">
+        <div class="slot reveal">
+          <div class="time">09:30 ~ 11:00</div>
+          <div>
+            <h4>해운대 달맞이길 브런치</h4>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">11:00 ~ 14:00</div>
+          <div>
+            <h4>해리단길 소품샵</h4>
+            <p class="desc">골목 구경하며 소품샵 투어, 이후 기장 아홉산숲으로 이동.</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">14:00 ~ 16:00</div>
+          <div>
+            <h4>스카이라인 루지 부산</h4>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">16:00 ~ 18:00</div>
+          <div>
+            <h4>피크스퀘어, 웨이브온 카페</h4>
+            <p class="desc">바다 보며 카페 타임. 근처 동부산 롯데아울렛도 잠깐 들를 수 있어요.</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">해질 무렵</div>
+          <div>
+            <h4>광안대교 뷰</h4>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">18:00 ~ 20:00</div>
+          <div>
+            <h4>광안리 밀락더마켓</h4>
+            <p class="desc">구경하다가 야시장 음식 사서 숙소에서 먹는 것도 좋을 듯.</p>
+            <p class="note"><b>주차</b> 민락수변공원 공영주차장 또는 밀락더마켓 앞 주차장</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="day" id="day3">
+    <div class="wrap">
+      <div class="dayhead">
+        <span class="n">03</span>
+        <h2>롯데호텔 호캉스</h2>
+        <span class="date">7월 28일 화요일</span>
+      </div>
+      <p class="daysub">오늘은 쉬는 날. 전포에서 점심 먹고 호텔에서 수영하고, 저녁엔 근처 바에서 한잔.</p>
+      <div class="timeline">
+        <div class="slot reveal">
+          <div class="time">11:00 ~ 12:00</div>
+          <div>
+            <h4>롯데호텔로 이동</h4>
+            <p class="desc">주차하고 짐 맡긴 뒤 전포로 이동.</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">12:00</div>
+          <div>
+            <h4>전포에서 점심</h4>
+            <p class="desc">셋 중에 그날 끌리는 걸로.</p>
+            <div class="links">
+              <a class="chip" href="https://naver.me/GZZuCXcj" target="_blank" rel="noopener">돈까스<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/FLyTXZ2i" target="_blank" rel="noopener">츠케멘<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/Fwj9nhW7" target="_blank" rel="noopener">중국집<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">오후</div>
+          <div>
+            <h4>체크인, 그리고 본격 호캉스</h4>
+            <p class="desc">운동, 수영, 낮잠. 같은 건물 <b>롯데백화점</b> 구경도 슬슬.</p>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">18:00 ~ 20:00</div>
+          <div>
+            <h4>근처 바에서 저녁 겸 술</h4>
+            <div class="links">
+              <a class="chip" href="https://naver.me/xf5ATiki" target="_blank" rel="noopener">일식 주점<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/F93Qbaly" target="_blank" rel="noopener">중식 주점<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">밤</div>
+          <div>
+            <h4>2차</h4>
+            <div class="links">
+              <a class="chip" href="https://naver.me/5Rh0dWFq" target="_blank" rel="noopener">2차 후보<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="day" id="day4">
+    <div class="wrap">
+      <div class="dayhead">
+        <span class="n">04</span>
+        <h2>서면 + 전포, 복귀</h2>
+        <span class="date">7월 29일 수요일</span>
+      </div>
+      <p class="daysub">마지막 날은 전포에서 밥 먹고 편집샵과 카페 돌다가 여유 있게 집으로.</p>
+      <div class="timeline">
+        <div class="slot reveal">
+          <div class="time">12:00</div>
+          <div>
+            <h4>전포에서 점심</h4>
+            <p class="desc">어제 안 간 곳으로 한 번 더.</p>
+            <div class="links">
+              <a class="chip" href="https://naver.me/GZZuCXcj" target="_blank" rel="noopener">돈까스<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/FLyTXZ2i" target="_blank" rel="noopener">츠케멘<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/Fwj9nhW7" target="_blank" rel="noopener">중국집<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">13:00 ~</div>
+          <div>
+            <h4>전포 편집샵 구경</h4>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">15:00</div>
+          <div>
+            <h4>카페 타임</h4>
+            <div class="links">
+              <a class="chip" href="https://naver.me/IGJyFnm9" target="_blank" rel="noopener">히떼<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+              <a class="chip" href="https://naver.me/GctrEu0p" target="_blank" rel="noopener">베르크<svg viewBox="0 0 12 12" fill="none"><path d="M3 9L9 3M9 3H4M9 3V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+            </div>
+          </div>
+        </div>
+        <div class="slot reveal">
+          <div class="time">이후</div>
+          <div>
+            <h4>집으로 복귀</h4>
+            <p class="desc">3박 4일 끝. 안전운전!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="t">솨<b>♥</b>울 함께 떠나는 부산여행</span>
+    <a class="sheet" href="https://docs.google.com/spreadsheets/d/1871ohfirPV1rEdGPdlvNnqRN6xlnFHY3KN5xTRjY7xE/edit?gid=1373976901" target="_blank" rel="noopener">일정표 원본 시트 열기</a>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    var root = document.documentElement;
+    var saved = null;
+    try{ saved = localStorage.getItem('busan-theme'); }catch(e){}
+    if(saved){ root.setAttribute('data-theme', saved); }
+    document.getElementById('themeBtn').addEventListener('click', function(){
+      var dark = root.getAttribute('data-theme') === 'dark' ||
+        (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = dark ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try{ localStorage.setItem('busan-theme', next); }catch(e){}
+    });
+
+    setTimeout(function(){
+      document.querySelectorAll('img').forEach(function(img){
+        if(!img.complete || img.naturalWidth === 0){
+          var u = new URL(img.src);
+          u.searchParams.set('retry','1');
+          img.src = u.href;
+        }
+      });
+    }, 5000);
+
+    if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window){
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); }
+        });
+      }, {threshold:.15});
+      document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+    } else {
+      document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('in'); });
+    }
+  })();
+</script>
+
+</body>
+</html>
