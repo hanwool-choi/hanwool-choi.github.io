@@ -101,6 +101,7 @@ const App = {
           </div>
         </header>
         <main class="content" id="content"><div class="content-inner" id="view"></div></main>
+        <div class="action-bar" id="actionBarHost"></div>
       </div>
     </div>
     <div class="drawer-veil" id="drawerVeil" onclick="App.closeDrawer()"></div>
@@ -176,6 +177,7 @@ const App = {
     const prevRoute=this.route;
     if(prevRoute==='map'&&route!=='map') MapView.destroy();
     this.route=route; this.params=params;
+    this.hideActionBar();
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
     this.renderNav();
     const content=document.getElementById('content');
@@ -202,6 +204,7 @@ const App = {
     const content=document.getElementById('content');
     const st=content.scrollTop;
     const view=document.getElementById('view');
+    this.hideActionBar();
     view.innerHTML=V.render();
     if(V.bind) V.bind(view);
     content.scrollTop=st;
@@ -228,6 +231,8 @@ const App = {
     document.getElementById('modalVeil').classList.add('open');
   },
   closeModal(){ document.getElementById('modalVeil')?.classList.remove('open'); },
+  actionBar(html){ const h=document.getElementById('actionBarHost'); if(!h)return; h.innerHTML=html; h.classList.add('show'); },
+  hideActionBar(){ const h=document.getElementById('actionBarHost'); if(h){ h.classList.remove('show'); } },
   toast(msg){
     const box=document.getElementById('toasts');
     const t=document.createElement('div');

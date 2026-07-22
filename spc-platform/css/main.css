@@ -60,7 +60,7 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* ---------- App shell ---------- */
 .app{display:flex;height:100vh}
-.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
 .content{flex:1;overflow-y:auto;position:relative}
 .content-inner{padding:24px 28px 80px;max-width:1560px;margin:0 auto}
 .content.full-bleed .content-inner{padding:0;max-width:none;height:100%}
@@ -513,10 +513,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--su
 
 /* ---------- calendar ---------- */
 .cal{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
-.cal-head{display:grid;grid-template-columns:repeat(7,1fr);background:var(--navy);color:#C9D1DB;font-size:11.5px;font-weight:700}
+.cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));background:var(--navy);color:#C9D1DB;font-size:11.5px;font-weight:700}
 .cal-head div{padding:8px 10px;text-align:center}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
-.cal-cell{min-height:96px;border-top:1px solid var(--line);border-right:1px solid var(--line);padding:6px 7px;position:relative;transition:background .15s;cursor:pointer}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.cal-cell{min-width:0;min-height:96px;border-top:1px solid var(--line);border-right:1px solid var(--line);padding:6px 7px;position:relative;transition:background .15s;cursor:pointer}
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell:hover{background:var(--surface-2)}
 .cal-cell .cd-num{font-size:11.5px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums}

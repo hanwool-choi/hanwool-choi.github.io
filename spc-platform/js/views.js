@@ -66,7 +66,7 @@ Views.dashboard = {
         </div>
       </div>
 
-      <div class="grid" style="grid-template-columns:1.1fr 1fr 1fr">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
         <div class="card">
           <div class="card-head"><h3>장비 상태 요약</h3><span class="chip chip-gray mono" style="font-size:10px">1.1.2</span>
             ${mapBtn('맵에서 보기',{layers:['LY-01','LY-10']})}</div>
@@ -761,8 +761,8 @@ Views.work = {
         ${(evts[d]||[]).map(([t,c])=>`<div class="cal-evt ${c}">${t}</div>`).join('')}
       </div>`;
     }
-    return `<div class="grid" style="grid-template-columns:1fr 300px">
-      <div>
+    return `<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px">
+      <div style="min-width:0">
         <div class="filter-bar" style="margin-bottom:12px">
           <div class="seg"><button class="active">월</button><button onclick="App.toast('주간 뷰 (데모)')">주</button></div>
           <b style="font-size:15px;margin-left:6px">2026년 7월</b>
@@ -912,15 +912,18 @@ Views.work = {
           <td>${a.team?`<span class="chip chip-blue">${a.team}</span>`:'<span style="color:var(--ink-3)">미배정</span>'}</td>
           <td class="t-num t-strong">${a.price?fmtW(a.price):`<span class="chip chip-red">반려</span> <small style="color:var(--ink-3)">${a.memo||''}</small>`}</td>
         </tr>`;}).join('')}</tbody>
-    </table></div>
-    <div class="action-bar ${sel.size?'show':''}">
+    </table></div>`;
+  },
+  syncActionBar(){
+    const sel=this.selApplicants;
+    if(!(this.tab==='agency'&&this.agencySub==='intake'&&sel.size)){ App.hideActionBar(); return; }
+    App.actionBar(`
       <span class="ab-chip">선택 ${sel.size}</span>
       <span class="ab-info">농가 <b>${sel.size}명</b> · 필지 ${sel.size}건 · 합계 <b>${fmt([...sel].reduce((s,i)=>s+APPLICANTS[i].area,0))}평</b> · 예상 정산 <b>${fmtW([...sel].reduce((s,i)=>s+APPLICANTS[i].price,0))}</b></span>
       <div class="spacer"></div>
       <button class="btn btn-ghost" style="border-color:#46505C;color:#C9D1DB" onclick="App.toast('선택 해제');Views.work.selApplicants.clear();App.rerender()">선택 해제</button>
       <button class="btn btn-navy" style="background:#39424E" onclick="App.toast('선택 필지 반려 처리 (데모)')">선택 필지 반려</button>
-      <button class="btn btn-primary" onclick="App.toast('AI 배차 최적화 — 대행단 매칭 완료 (이동거리 -18%)');Views.work.selApplicants.clear();App.rerender()">${App.icon('bot')} 선택 필지 수락 및 매칭</button>
-    </div>`;
+      <button class="btn btn-primary" onclick="App.toast('AI 배차 최적화 — 대행단 매칭 완료 (이동거리 -18%)');Views.work.selApplicants.clear();App.rerender()">${App.icon('bot')} 선택 필지 수락 및 매칭</button>`);
   },
   toggleApplicant(i){ const s=this.selApplicants; s.has(i)?s.delete(i):s.add(i); App.rerender(); },
   /* ---- 6.5.1 오프라인 접수 AI OCR ---- */
@@ -1104,5 +1107,5 @@ Views.work = {
       </div>
     </div>`;
   },
-  bind(root){ Charts.arm(root); }
+  bind(root){ Charts.arm(root); this.syncActionBar(); }
 };
