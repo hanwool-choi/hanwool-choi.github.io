@@ -1,0 +1,575 @@
+/* ============================================================
+   통합 모니터링 — Single Map, Multi-Layer 엔진
+   SVG 기반 위성 질감 맵 + 레이어 시스템 + 실시간 장비 애니메이션
+   ============================================================ */
+const MapView = (() => {
+  let state = null, raf = null, host = null;
+
+  const bboxOf = poly => {
+    const xs = poly.map(p=>p[0]), ys = poly.map(p=>p[1]);
+    return { x:Math.min(...xs), y:Math.min(...ys), w:Math.max(...xs)-Math.min(...xs), h:Math.max(...ys)-Math.min(...ys) };
+  };
+  const ptsStr = poly => poly.map(p=>p.join(',')).join(' ');
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const hexLerp=(c1,c2,t)=>{
+    const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+    const [r1,g1,b1]=p(c1),[r2,g2,b2]=p(c2);
+    return `rgb(${Math.round(lerp(r1,r2,t))},${Math.round(lerp(g1,g2,t))},${Math.round(lerp(b1,b2,t))})`;
+  };
+  const RAMPS = {
+    soil:  t=> t<.5? hexLerp('#C9A227','#9C6B3F',t*2) : hexLerp('#9C6B3F','#5C3D22',(t-.5)*2),
+    ndvi:  t=> t<.5? hexLerp('#D9534F','#E8D44D',t*2) : hexLerp('#E8D44D','#1E8F4E',(t-.5)*2),
+    yield: t=> t<.5? hexLerp('#F0E4B0','#D9B93B',t*2) : hexLerp('#D9B93B','#8F6D0A',(t-.5)*2),
+    vrt:   t=> t<.5? hexLerp('#CDEFEA','#3FB2A1',t*2) : hexLerp('#3FB2A1','#0F5E54',(t-.5)*2),
+  };
+  const RAMP_LABEL = { soil:['유기물 낮음','높음','soil'], ndvi:['NDVI 0.2','0.9','ndvi'], yield:['400kg/10a','650kg','yield'], vrt:['16kg/10a','33kg','vrt'] };
+
+  /* serpentine work path inside field bbox */
+  function serpentine(f, rows=6){
+    const b = bboxOf(f.poly), inset=12, pts=[];
+    const x0=b.x+inset, x1=b.x+b.w-inset, y0=b.y+inset, dh=(b.h-inset*2)/(rows-1);
+    for(let i=0;i<rows;i++){ const y=y0+i*dh; if(i%2===0){pts.push([x0,y],[x1,y]);}else{pts.push([x1,y],[x0,y]);} }
+    return pts;
+  }
+  function pathLength(pts){ let L=0; for(let i=1;i<pts.length;i++){L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);} return L; }
+  function pointAt(pts, d){
+    for(let i=1;i<pts.length;i++){
+      const seg=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+      if(d<=seg){ const t=d/seg; return { x:lerp(pts[i-1][0],pts[i][0],t), y:lerp(pts[i-1][1],pts[i][1],t), ang:Math.atan2(pts[i][1]-pts[i-1][1],pts[i][0]-pts[i-1][0])*180/Math.PI }; }
+      d-=seg;
+    }
+    const l=pts[pts.length-1]; return {x:l[0],y:l[1],ang:0};
+  }
+
+  /* road network path for moving vehicle */
+  const ROAD = [[60,760],[60,60],[480,60],[480,700],[720,700],[720,80],[1140,80],[1140,760]];
+
+  function defaults(){
+    return {
+      layers: Object.fromEntries(LAYERS.map(l=>[l.id, l.on])),
+      opacity: Object.fromEntries(LAYERS.map(l=>[l.id, 100])),
+      stop: 'vrt',
+      playing:false, compare:false,
+      view:{x:0,y:0,w:1200,h:800},
+      selField:null, selVeh:null, amotionFocus:false,
+      base:'sat',
+      vehProg:{ 'VH-001':0.42, 'VH-002':0.65 },
+      vehDist:{}, movDist:0,
+    };
+  }
+
+  function init(container, preset){
+    host = container;
+    state = defaults();
+    if (preset){
+      if (preset.layers){ LAYERS.forEach(l=>state.layers[l.id]=preset.layers.includes(l.id)); }
+      if (preset.stop) state.stop = preset.stop;
+      if (preset.focus) state.selField = preset.focus;
+      if (preset.amotion){ state.layers['LY-03']=true; state.amotionFocus=true; }
+    } else {
+      const rp = LAYER_PRESETS[App.role.id]; LAYERS.forEach(l=>state.layers[l.id]=rp.on.includes(l.id));
+    }
+    if (state.selField){ focusField(state.selField, false); }
+    render();
+    loop();
+  }
+  function destroy(){ cancelAnimationFrame(raf); raf=null; state=null; host=null; }
+
+  function anyTimelineOn(){ return LAYERS.some(l=>l.timeline && state.layers[l.id]); }
+  function activeAgroLayer(){
+    const stop = TIME_STOPS.find(s=>s.id===state.stop);
+    return stop ? stop.layer : null;
+  }
+
+  function focusField(fid, rerender=true){
+    const f = FIELDS.find(x=>x.id===fid); if(!f) return;
+    const b = bboxOf(f.poly), pad=140;
+    state.view = { x:b.x-pad, y:b.y-pad, w:b.w+pad*2, h:(b.w+pad*2)*(2/3) };
+    state.selField = fid;
+    if(rerender) render();
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    const s = state;
+    const tlOn = anyTimelineOn();
+    host.innerHTML = `
+    <div class="map-shell">
+      <div class="map-stage" id="mapStage">
+        ${renderSVG()}
+        <div class="map-topbar">
+          <div class="map-search">${App.icon('search')}<input placeholder="필지·장비·주소 검색" id="mapSearch"></div>
+          <div class="map-mode">
+            <button class="${s.base==='sat'?'active':''}" data-base="sat">위성</button>
+            <button class="${s.base==='plain'?'active':''}" data-base="plain">일반</button>
+          </div>
+          <div class="map-live"><span class="live-dot"></span> LIVE <span class="mono" style="color:#8D97A5;font-size:10px" id="liveClock">--:--:--</span></div>
+          <button class="btn btn-sm map-views" style="background:rgba(255,255,255,.96);box-shadow:var(--shadow-md);border-radius:999px" id="saveView">${App.icon('bookmark')} 맵 뷰 저장</button>
+        </div>
+        ${renderLegend()}
+        <div class="map-zoom">
+          <button id="zin">+</button><div class="mz-div"></div><button id="zout">−</button><div class="mz-div"></div><button id="zfit" title="전체 보기">${App.icon('fit')}</button>
+        </div>
+        <div class="timeline ${tlOn?'show':''}" id="timeline">
+          <button class="tl-play" id="tlPlay">${App.icon(s.playing?'pause':'play')}</button>
+          <div class="tl-track" id="tlTrack">
+            <div class="tl-line"></div><div class="tl-fill" id="tlFill"></div>
+            ${TIME_STOPS.map((st,i)=>{
+              const x = 6+ i*(88/(TIME_STOPS.length-1));
+              const idx = TIME_STOPS.findIndex(t=>t.id===s.stop);
+              return `<div class="tl-stop ${i<idx?'passed':''} ${st.id===s.stop?'active':''} ${st.future?'future':''}" style="left:${x}%" data-stop="${st.id}">
+                <div class="ts-lab">${st.label}</div><div class="ts-dot"></div><div class="ts-date">${st.date}</div></div>`;
+            }).join('')}
+          </div>
+          <button class="tl-compare ${s.compare?'active':''}" id="tlCompare">2분할 비교</button>
+        </div>
+        ${s.amotionFocus && s.layers['LY-03'] ? renderAmotionStrip() : ''}
+        <div id="mapPop"></div>
+      </div>
+      ${renderDock()}
+    </div>`;
+    bind();
+    positionTlFill();
+    tickClock();
+  }
+
+  function renderLegend(){
+    const s=state; const rows=[];
+    if(s.layers['LY-01']) rows.push(`<div class="ml-row"><i style="background:#0E9F5A"></i>작업중</div><div class="ml-row"><i style="background:#2E6BE6"></i>이동중</div><div class="ml-row"><i style="background:#9AA3AF"></i>유휴</div><div class="ml-row"><i style="background:#E5352C"></i>정비필요</div>`);
+    const agro = activeAgroLayer();
+    if (agro && s.layers[agro]){
+      const key = {'LY-06':'soil','LY-07':'ndvi','LY-08':'yield','LY-09':'vrt'}[agro];
+      const [lo,hi]=RAMP_LABEL[key];
+      const grad = `linear-gradient(90deg, ${RAMPS[key](0)}, ${RAMPS[key](.5)}, ${RAMPS[key](1)})`;
+      rows.push(`<div class="ml-title" style="margin-top:4px">${LAYERS.find(l=>l.id===agro).name}</div>
+        <div class="ml-grad" style="background:${grad}"></div><div class="ml-grad-lab"><span>${lo}</span><span>${hi}</span></div>`);
+    }
+    if(!rows.length) return '';
+    return `<div class="map-legend"><div class="ml-title">범례</div>${rows.join('')}</div>`;
+  }
+
+  function renderAmotionStrip(){
+    const j = JOBS.find(j=>j.id==='JOB-104'), v = EQUIP.find(e=>e.id==='VH-001');
+    return `<div class="amotion-strip">
+      <div class="as-head">${App.icon('bot')} A-Motion 관제 — ${v.nick}</div>
+      <div class="as-body">
+        <div class="as-stat"><span>작업</span><b>${j.name}</b></div>
+        <div class="as-stat"><span>진행률</span><b id="amProg">${Math.round(state.vehProg['VH-001']*100)}%</b></div>
+        <div class="as-stat"><span>경심 깊이 / 작업 단수</span><b>${j.depth} / ${j.rows}단</b></div>
+        <div class="as-stat"><span>이상감지 이벤트</span><b style="color:var(--green)">0건</b></div>
+        <div class="as-stat"><span>계획 대비 경로 이탈</span><b>±4cm (RTK)</b></div>
+        <div class="as-actions">
+          <button class="btn btn-sm btn-ghost" style="flex:1" onclick="App.toast('제어권은 현장 모바일 단말에 있습니다 (App 전용)')">${App.icon('phone')} 제어권</button>
+          <button class="btn btn-sm btn-primary" style="flex:1" onclick="App.toast('원격 일시정지 명령을 전송했습니다')">${App.icon('pause')} 일시정지</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderDock(){
+    const s=state;
+    const groups=['실시간','기록','정밀농업','기준정보'];
+    return `<aside class="layer-dock" id="layerDock">
+      <div class="dock-head">
+        <h2>${App.icon('layers')} 레이어</h2>
+        <div class="preset-row">
+          ${Object.entries(LAYER_PRESETS).map(([rid,p])=>`<button class="preset-pill ${App.role.id===rid?'active':''}" data-preset="${rid}">${p.label}</button>`).join('')}
+        </div>
+      </div>
+      <div class="dock-body">
+        ${groups.map(g=>`
+          <div class="layer-group">
+            <div class="lg-title">${g==='실시간'?'<span class="live-dot" style="width:5px;height:5px"></span>':''}${g} 레이어</div>
+            ${LAYERS.filter(l=>l.group===g).map(l=>`
+              <div class="layer-row ${s.layers[l.id]?'on':''}" data-layer="${l.id}">
+                <div class="lr-swatch" style="background:${l.color}">${App.icon(l.icon,14)}</div>
+                <div class="lr-txt"><b>${l.name}</b><small>${l.id} · ${l.refresh}</small></div>
+                <div class="lr-toggle"></div>
+              </div>
+              <div class="layer-opacity"><input type="range" min="20" max="100" value="${s.opacity[l.id]}" data-op="${l.id}"><span>${s.opacity[l.id]}%</span></div>
+            `).join('')}
+          </div>`).join('')}
+      </div>
+      <div class="dock-foot">
+        <button class="btn btn-ghost btn-sm" style="flex:1" id="dockShare">${App.icon('share')} 뷰 공유</button>
+        <button class="btn btn-navy btn-sm" style="flex:1" onclick="App.go('farm',{tab:'boundary'})">${App.icon('edit')} 경계 편집</button>
+      </div>
+    </aside>`;
+  }
+
+  /* ------------ SVG scene ------------ */
+  function renderSVG(){
+    const s=state, v=s.view;
+    const sat = s.base==='sat';
+    return `<svg class="mapviz" id="mapSvg" viewBox="${v.x} ${v.y} ${v.w} ${v.h}" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <filter id="terr" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.012 0.02" numOctaves="3" seed="7" result="n"/>
+          <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.32, 0 0 0 0 0.38, 0 0 0 0 0.26, 0 0 0 0.35 0" result="tint"/>
+          <feComposite in="tint" in2="SourceGraphic" operator="atop"/>
+        </filter>
+        <filter id="croprow" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="turbulence" baseFrequency="0.9 0.06" numOctaves="1" seed="3" result="rows"/>
+          <feColorMatrix in="rows" type="matrix" values="0 0 0 0 1, 0 0 0 0 1, 0 0 0 0 1, 0 0 0 0.10 0" result="rw"/>
+          <feComposite in="rw" in2="SourceGraphic" operator="atop"/>
+        </filter>
+        <filter id="soft" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.35"/></filter>
+        <linearGradient id="water" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#39566B"/><stop offset="1" stop-color="#2A4356"/>
+        </linearGradient>
+      </defs>
+      <!-- base terrain -->
+      <rect x="-200" y="-200" width="1600" height="1200" fill="${sat?'#4A5B3E':'#EDEAE2'}"/>
+      ${sat?`<rect x="-200" y="-200" width="1600" height="1200" fill="#55673F" filter="url(#terr)" opacity=".9"/>`:''}
+      <!-- stream -->
+      <path d="M 470 -100 C 500 100, 445 300, 480 480 C 505 620, 460 720, 490 900" fill="none" stroke="${sat?'url(#water)':'#BFD5E4'}" stroke-width="26" opacity="${sat?.85:1}"/>
+      <!-- roads -->
+      <g stroke="${sat?'#C9C2AE':'#D8D4C8'}" stroke-width="10" fill="none" opacity="${sat?.75:1}">
+        <path d="M 60 -100 V 900"/><path d="M -100 60 H 1300"/><path d="M 720 -100 V 900"/><path d="M -100 700 H 1300"/><path d="M 960 -100 V 900"/>
+      </g>
+      <g stroke="${sat?'#8E8A76':'#C4C0B4'}" stroke-width="1.2" stroke-dasharray="14 10" fill="none" opacity=".7">
+        <path d="M 60 -100 V 900"/><path d="M 720 -100 V 900"/>
+      </g>
+      <!-- non-field paddies (ambience) -->
+      ${ambient(sat)}
+      <!-- managed fields -->
+      ${FIELDS.map(f=>fieldSVG(f,sat)).join('')}
+      <!-- layers -->
+      ${s.layers['LY-05']? routeSVG() : ''}
+      ${s.layers['LY-02']? coverageSVG() : ''}
+      ${s.layers['LY-03']? amotionSVG() : ''}
+      ${s.layers['LY-01']? vehiclesSVG() : ''}
+      <!-- village marker -->
+      <g transform="translate(495,585)" opacity=".95">
+        <rect x="-26" y="-11" width="52" height="20" rx="10" fill="rgba(32,39,47,.85)"/>
+        <text x="0" y="4" text-anchor="middle" font-size="10.5" fill="#fff" font-weight="700" font-family="var(--font)">안들</text>
+      </g>
+      <!-- scale -->
+      <g transform="translate(${v.x+v.w-160},${v.y+v.h-28})">
+        <rect x="0" y="0" width="60" height="4" fill="#fff" opacity=".9"/><rect x="0" y="0" width="30" height="4" fill="#20272F" opacity=".8"/>
+        <text x="66" y="6" font-size="11" fill="#fff" font-weight="600" style="paint-order:stroke;stroke:rgba(0,0,0,.4);stroke-width:2">100m</text>
+      </g>
+    </svg>`;
+  }
+
+  function ambient(sat){
+    if(!sat) return '';
+    const cells=[];
+    const cols=[[-140,20],[80,300],[990,60],[990,420],[520,560],[760,660]];
+    cols.forEach(([cx,cy],ci)=>{
+      for(let i=0;i<3;i++){
+        const y=cy+i*88, tone=['#5F7A4A','#6B854F','#577245','#728C55'][(ci+i)%4];
+        cells.push(`<rect x="${cx}" y="${y}" width="150" height="78" fill="${tone}" opacity=".55" filter="url(#croprow)"/>`);
+      }
+    });
+    return cells.join('');
+  }
+
+  function fieldSVG(f, sat){
+    const s=state, sel=s.selField===f.id;
+    const agro = activeAgroLayer();
+    const showZones = agro && s.layers[agro];
+    const b=bboxOf(f.poly);
+    let zones='';
+    if (showZones){
+      const key={'LY-06':'soil','LY-07':'ndvi','LY-08':'yield','LY-09':'vrt'}[agro];
+      const dataKey = key==='ndvi' && state.stop==='growth2' ? 'ndvi2' : key;
+      const vals = ZONES[f.id][dataKey] || ZONES[f.id][key];
+      const op = s.opacity[agro]/100;
+      const gw=b.w/4, gh=b.h/4;
+      vals.forEach((t,i)=>{
+        const gx=b.x+(i%4)*gw, gy=b.y+Math.floor(i/4)*gh;
+        zones+=`<rect class="zone" x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="${RAMPS[key](t)}" opacity="${op}"/>`;
+      });
+    }
+    const boundary = s.layers['LY-10'];
+    return `<g>
+      <polygon class="fld ${sel?'sel':''}" data-field="${f.id}" points="${ptsStr(f.poly)}"
+        fill="${sat? f.tone : '#E3EED9'}" ${sat?'filter="url(#croprow)"':''}
+        style="${boundary?'':'stroke:transparent'}" ${sel?'stroke="#fff"':''}/>
+      ${zones}
+      ${boundary?`<polygon points="${ptsStr(f.poly)}" fill="none" stroke="${sel?'#FFFFFF':'rgba(255,255,255,.75)'}" stroke-width="${sel?3:1.6}" pointer-events="none" ${sel?'stroke-dasharray="6 4" style="animation:march 1.2s linear infinite"':''}/>`:''}
+      <text class="fld-label" x="${b.x+b.w/2}" y="${b.y+18}" text-anchor="middle">${f.name}</text>
+      <text x="${b.x+b.w/2}" y="${b.y+31}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.75)" font-family="var(--mono)" pointer-events="none">${f.id} · ${fmt(f.area)}평</text>
+    </g>
+    <style>@keyframes march{to{stroke-dashoffset:-20}}</style>`;
+  }
+
+  function coverageSVG(){
+    const s=state; let out='';
+    JOBS.filter(j=>j.status==='run'||j.status==='issue').forEach(j=>{
+      const f=FIELDS.find(x=>x.id===j.field); if(!f) return;
+      const b=bboxOf(f.poly);
+      const prog = s.vehProg[j.veh] ?? j.prog/100;
+      const color = j.type==='A-Motion' ? '#6E56CF' : (j.status==='issue'?'#E5352C':'#2E6BE6');
+      const op=s.opacity['LY-02']/100;
+      out+=`<g class="cov-poly">
+        <clipPath id="clip-${j.id}"><polygon points="${ptsStr(f.poly)}"/></clipPath>
+        <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h*prog}" fill="${color}" opacity="${.32*op}" clip-path="url(#clip-${j.id})"/>
+        <line x1="${b.x}" x2="${b.x+b.w}" y1="${b.y+b.h*prog}" y2="${b.y+b.h*prog}" stroke="${color}" stroke-width="1.6" opacity="${.8*op}" clip-path="url(#clip-${j.id})"/>
+        <g transform="translate(${b.x+b.w-14},${b.y+14})">
+          <rect x="-38" y="-10" width="52" height="19" rx="9.5" fill="${color}" filter="url(#soft)"/>
+          <text x="-12" y="4" text-anchor="middle" font-size="10" font-weight="800" fill="#fff" id="covlab-${j.id}">${Math.round(prog*100)}%</text>
+        </g>
+      </g>`;
+    });
+    /* as-applied 기록 레이어 */
+    if (s.layers['LY-04']){
+      JOBS.filter(j=>j.status==='done'&&j.veh).forEach(j=>{
+        const f=FIELDS.find(x=>x.id===j.field); if(!f)return;
+        const b=bboxOf(f.poly); const op=s.opacity['LY-04']/100;
+        for(let i=0;i<6;i++){
+          const t=(Math.sin(i*2.7+j.id.length)+1)/2;
+          out+=`<rect x="${b.x+4}" y="${b.y+4+i*(b.h-8)/6}" width="${b.w-8}" height="${(b.h-8)/6-1.5}" rx="2"
+            fill="${hexLerp('#F2C14E','#C56A1D',t)}" opacity="${.5*op}" pointer-events="none"/>`;
+        }
+      });
+    }
+    return out;
+  }
+
+  function amotionSVG(){
+    const f=FIELDS.find(x=>x.id==='GJ-R3'); const pts=serpentine(f,7);
+    const d='M '+pts.map(p=>p.join(' ')).join(' L ');
+    return `<g>
+      <path class="route-line" d="${d}" stroke="#6E56CF" stroke-width="2" stroke-dasharray="5 4" opacity=".85"/>
+      ${pts.filter((_,i)=>i%2===0).map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.2" fill="#6E56CF"/>`).join('')}
+    </g>`;
+  }
+
+  function routeSVG(){
+    const op=state.opacity['LY-05']/100;
+    const d='M '+ROAD.map(p=>p.join(' ')).join(' L ');
+    return `<path class="route-line" d="${d}" stroke="#8B94A3" stroke-width="2.4" opacity="${.7*op}" stroke-dasharray="2 6"/>`;
+  }
+
+  function vehiclesSVG(){
+    return `<g id="vehLayer">${EQUIP.map(v=>{
+      const st=EQUIP_STATUS[v.status];
+      const col={work:'#0E9F5A',move:'#2E6BE6',idle:'#9AA3AF',maint:'#E5352C'}[v.status];
+      return `<g class="veh-marker" data-veh="${v.id}" id="vm-${v.id}">
+        <g class="vm-body">
+          ${v.status==='work'||v.status==='move'?`<circle r="14" fill="${col}" opacity=".25"><animate attributeName="r" values="10;20;10" dur="2.2s" repeatCount="indefinite"/><animate attributeName="opacity" values=".3;0;.3" dur="2.2s" repeatCount="indefinite"/></circle>`:''}
+          <circle r="11" fill="${col}" stroke="#fff" stroke-width="2" filter="url(#soft)"/>
+          ${v.amotion?`<circle r="14.5" fill="none" stroke="#6E56CF" stroke-width="1.6" stroke-dasharray="3 3"/>`:''}
+          <g transform="translate(-6,-6) scale(0.5)" fill="#fff">${App.iconRaw(v.type==='콤바인'?'combine':v.type==='방제드론'?'drone':'tractor')}</g>
+        </g>
+        <g transform="translate(0,-24)">
+          <rect x="-34" y="-11" width="68" height="17" rx="8.5" fill="rgba(32,39,47,.88)"/>
+          <text y="2" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" font-family="var(--font)">${v.model}</text>
+        </g>
+      </g>`;
+    }).join('')}</g>`;
+  }
+
+  /* ---------------- animation loop ---------------- */
+  let last=0;
+  function loop(ts){
+    raf=requestAnimationFrame(loop);
+    if(!state||!host) return;
+    if(ts-last<50) return; const dt=Math.min(0.2,(ts-last)/1000||0.05); last=ts;
+    /* progress working vehicles */
+    ['VH-001','VH-002'].forEach(id=>{
+      if(!state.layers['LY-01']&&!state.layers['LY-02'])return;
+      state.vehProg[id]=Math.min(0.995, (state.vehProg[id]??0.4)+dt*0.004);
+    });
+    state.movDist=(state.movDist+dt*46)%pathLength(ROAD);
+    positionVehicles();
+    /* timeline autoplay */
+    if(state.playing){
+      state._pt=(state._pt||0)+dt;
+      if(state._pt>1.8){ state._pt=0; stepStop(1); }
+    }
+  }
+
+  function positionVehicles(){
+    if(!host) return;
+    EQUIP.forEach(v=>{
+      const el=host.querySelector(`#vm-${v.id}`); if(!el) return;
+      let x,y,ang=0;
+      if(v.status==='work'&&v.field){
+        const f=FIELDS.find(ff=>ff.id===v.field);
+        const pts=serpentine(f, v.amotion?7:6);
+        const L=pathLength(pts);
+        const p=pointAt(pts, L*(state.vehProg[v.id]??0.4)); x=p.x;y=p.y;ang=p.ang;
+      } else if (v.status==='move'){
+        const p=pointAt(ROAD, state.movDist); x=p.x;y=p.y;ang=p.ang;
+      } else {
+        const spots={ 'VH-004':[985,240],'VH-005':[1000,300],'VH-006':[1010,360] };
+        [x,y]=spots[v.id]||[1000,300+Math.random()*10];
+      }
+      el.setAttribute('transform',`translate(${x},${y})`);
+      const lab=host.querySelector(`#covlab-${v.job}`);
+      if(lab) lab.textContent=Math.round((state.vehProg[v.id]??0)*100)+'%';
+      const am=host.querySelector('#amProg');
+      if(am&&v.id==='VH-001') am.textContent=Math.round((state.vehProg['VH-001'])*100)+'%';
+    });
+  }
+
+  function tickClock(){
+    const el=host&&host.querySelector('#liveClock'); if(!el) return;
+    const u=()=>{ if(!host)return; const d=new Date(); el.textContent=d.toTimeString().slice(0,8); };
+    u(); clearInterval(state._clk); state._clk=setInterval(u,1000);
+  }
+
+  /* ---------------- interactions ---------------- */
+  function stepStop(dir){
+    const avail=TIME_STOPS.filter(s=>!s.future);
+    let i=avail.findIndex(s=>s.id===state.stop); i=(i+dir+avail.length)%avail.length;
+    setStop(avail[i].id);
+  }
+  function setStop(id){
+    const stop=TIME_STOPS.find(s=>s.id===id);
+    if(stop.future){ App.toast('수확 데이터는 10월 수확 후 제공됩니다'); return; }
+    state.stop=id;
+    /* auto-switch agronomy layer to the stop's layer */
+    LAYERS.filter(l=>l.timeline).forEach(l=>state.layers[l.id]=(l.id===stop.layer));
+    render();
+  }
+  function positionTlFill(){
+    const idx=TIME_STOPS.findIndex(t=>t.id===state.stop);
+    const fill=host.querySelector('#tlFill');
+    if(fill) fill.style.width=(6+idx*(88/(TIME_STOPS.length-1)))+'%';
+  }
+
+  function bind(){
+    const stage=host.querySelector('#mapStage'), svg=host.querySelector('#mapSvg');
+    /* base toggle */
+    host.querySelectorAll('[data-base]').forEach(b=>b.onclick=()=>{ state.base=b.dataset.base; render(); });
+    /* zoom */
+    const zoom=f=>{ const v=state.view, cx=v.x+v.w/2, cy=v.y+v.h/2;
+      v.w=Math.max(220,Math.min(1600,v.w*f)); v.h=v.w*(2/3); v.x=cx-v.w/2; v.y=cy-v.h/2;
+      svg.setAttribute('viewBox',`${v.x} ${v.y} ${v.w} ${v.h}`); };
+    host.querySelector('#zin').onclick=()=>zoom(0.8);
+    host.querySelector('#zout').onclick=()=>zoom(1.25);
+    host.querySelector('#zfit').onclick=()=>{ state.view={x:0,y:0,w:1200,h:800}; state.selField=null; render(); };
+    svg.addEventListener('wheel',e=>{ e.preventDefault(); zoom(e.deltaY>0?1.12:0.9); },{passive:false});
+    /* pan */
+    let drag=null;
+    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:state.view.x,vy:state.view.y}; svg.setPointerCapture(e.pointerId); });
+    svg.addEventListener('pointermove',e=>{ if(!drag)return; const sc=state.view.w/stage.clientWidth;
+      state.view.x=drag.vx-(e.clientX-drag.x)*sc; state.view.y=drag.vy-(e.clientY-drag.y)*sc;
+      svg.setAttribute('viewBox',`${state.view.x} ${state.view.y} ${state.view.w} ${state.view.h}`); });
+    svg.addEventListener('pointerup',()=>drag=null);
+    /* field click */
+    host.querySelectorAll('.fld').forEach(p=>p.addEventListener('click',e=>{
+      if(dragMoved(e))return;
+      const fid=p.dataset.field; state.selField=fid; showFieldPop(fid,e);
+      host.querySelectorAll('.fld').forEach(q=>q.classList.toggle('sel',q.dataset.field===fid));
+    }));
+    /* vehicle click */
+    host.querySelectorAll('.veh-marker').forEach(m=>m.addEventListener('click',e=>{ e.stopPropagation(); showVehPop(m.dataset.veh,e); }));
+    let dstart=null;
+    svg.addEventListener('pointerdown',e=>dstart=[e.clientX,e.clientY]);
+    const dragMoved=e=>dstart&&Math.hypot(e.clientX-dstart[0],e.clientY-dstart[1])>6;
+    /* layers */
+    host.querySelectorAll('.layer-row').forEach(r=>r.addEventListener('click',e=>{
+      if(e.target.closest('input'))return;
+      const id=r.dataset.layer; state.layers[id]=!state.layers[id];
+      if(id==='LY-03'&&state.layers[id]) state.amotionFocus=true;
+      if(LAYERS.find(l=>l.id===id).timeline && state.layers[id]){
+        const stop=TIME_STOPS.find(s=>s.layer===id&&!s.future); if(stop) state.stop=stop.id;
+        LAYERS.filter(l=>l.timeline&&l.id!==id).forEach(l=>state.layers[l.id]=false);
+      }
+      render();
+    }));
+    host.querySelectorAll('[data-op]').forEach(sl=>{
+      sl.addEventListener('input',()=>{ state.opacity[sl.dataset.op]=+sl.value; sl.nextElementSibling.textContent=sl.value+'%';
+        /* live update zone/coverage opacity without full re-render */
+        renderPatch(); });
+    });
+    host.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{
+      const p=LAYER_PRESETS[b.dataset.preset];
+      LAYERS.forEach(l=>state.layers[l.id]=p.on.includes(l.id));
+      render(); App.toast(`레이어 프리셋 적용: ${p.label}`);
+    });
+    /* timeline */
+    const tp=host.querySelector('#tlPlay');
+    if(tp) tp.onclick=()=>{ state.playing=!state.playing; render(); };
+    host.querySelectorAll('.tl-stop').forEach(st=>st.onclick=()=>setStop(st.dataset.stop));
+    const tc=host.querySelector('#tlCompare');
+    if(tc) tc.onclick=()=>{ state.compare=!state.compare; tc.classList.toggle('active'); App.toast(state.compare?'2분할 비교: 처방맵 vs 생육진단 (프로토타입 데모)':'2분할 비교 해제'); };
+    /* search */
+    const ms=host.querySelector('#mapSearch');
+    ms.addEventListener('keydown',e=>{
+      if(e.key!=='Enter')return;
+      const q=ms.value.trim();
+      const f=FIELDS.find(f=>f.name.includes(q)||f.id.toLowerCase().includes(q.toLowerCase())||f.addr.includes(q));
+      const v=EQUIP.find(v=>v.model.toLowerCase().includes(q.toLowerCase())||v.nick.includes(q));
+      if(f){ focusField(f.id); App.toast(`${f.name} (${f.id})로 이동`); }
+      else if(v){ App.toast(`${v.nick} 위치로 이동`); }
+      else App.toast('검색 결과가 없습니다');
+    });
+    host.querySelector('#saveView').onclick=()=>App.toast('현재 맵 뷰가 저장되었습니다 — 조직 공유 가능');
+    host.querySelector('#dockShare').onclick=()=>App.toast('맵 뷰 공유 링크가 복사되었습니다');
+  }
+
+  function renderPatch(){
+    /* light refresh of zone opacity: full render is cheap enough */
+    const scroll=host.querySelector('.dock-body')?.scrollTop||0;
+    render();
+    const db=host.querySelector('.dock-body'); if(db) db.scrollTop=scroll;
+  }
+
+  function showFieldPop(fid, e){
+    const f=FIELDS.find(x=>x.id===fid);
+    const jobs=JOBS.filter(j=>j.field===fid);
+    const run=jobs.find(j=>j.status==='run');
+    const pop=host.querySelector('#mapPop');
+    const stage=host.querySelector('#mapStage').getBoundingClientRect();
+    const x=Math.min(e.clientX-stage.left+14, stage.width-310), y=Math.min(e.clientY-stage.top-20, stage.height-260);
+    pop.innerHTML=`<div class="map-pop" style="left:${Math.max(10,x)}px;top:${Math.max(10,y)}px">
+      <div class="mp-head">
+        <div class="lr-swatch" style="background:${f.tone};width:30px;height:30px;border-radius:9px">${App.icon('map',15)}</div>
+        <div><b>${f.name}</b><small>${f.id} · ${f.addr}</small></div>
+        <button class="mp-x" onclick="this.closest('.map-pop').remove()">${App.icon('x',14)}</button>
+      </div>
+      <div class="mp-body">
+        <div class="mp-row"><span>면적 / 작물</span><b>${fmt(f.area)}평 · ${f.crop}</b></div>
+        <div class="mp-row"><span>농장 / 소유</span><b>${f.farm} · ${f.owner}</b></div>
+        <div class="mp-row"><span>진행 작업</span><b>${run? run.name+' ('+Math.round((state.vehProg[run.veh]??run.prog/100)*100)+'%)' : '없음'}</b></div>
+        <div class="mp-row"><span>최근 진단</span><b>생육진단 06.28 · NDVI 0.71</b></div>
+      </div>
+      <div class="mp-actions">
+        <button class="btn btn-sm btn-ghost" onclick="App.go('farm',{tab:'plot'})">필지 상세</button>
+        <button class="btn btn-sm btn-primary" onclick="App.go('precision',{tab:'diag'})">진단·처방 이력</button>
+      </div>
+    </div>`;
+  }
+
+  function showVehPop(vid,e){
+    const v=EQUIP.find(x=>x.id===vid);
+    const [stName,stColor]=EQUIP_STATUS[v.status];
+    const job=JOBS.find(j=>j.id===v.job);
+    const pop=host.querySelector('#mapPop');
+    const stage=host.querySelector('#mapStage').getBoundingClientRect();
+    const x=Math.min(e.clientX-stage.left+14, stage.width-310), y=Math.min(e.clientY-stage.top-20, stage.height-280);
+    pop.innerHTML=`<div class="map-pop" style="left:${Math.max(10,x)}px;top:${Math.max(10,y)}px">
+      <div class="mp-head">
+        <div class="lr-swatch" style="background:var(--navy);width:30px;height:30px;border-radius:9px">${App.icon('tractor',15)}</div>
+        <div><b>${v.nick}</b><small>${v.id} · TMU ${v.tmu}</small></div>
+        <button class="mp-x" onclick="this.closest('.map-pop').remove()">${App.icon('x',14)}</button>
+      </div>
+      <div class="mp-body">
+        <div class="mp-row"><span>상태</span><b><span class="chip chip-${stColor}"><span class="cd" style="background:currentColor"></span>${stName}</span></b></div>
+        <div class="mp-row"><span>연료 / DEF</span><b>${v.fuel??'-'}% · ${v.def??'-'}%</b></div>
+        <div class="mp-row"><span>금일 가동 / 누적</span><b>${v.todayH}h · ${fmt(v.hours)}h</b></div>
+        <div class="mp-row"><span>현재 작업</span><b>${job? job.name : '-'}</b></div>
+        ${v.dtc?`<div class="mp-row"><span>DTC</span><b style="color:var(--red)">${v.dtcCode} 외 ${v.dtc-1>0?v.dtc-1+'건':'0건'}</b></div>`:''}
+      </div>
+      <div class="mp-actions">
+        <button class="btn btn-sm btn-ghost" onclick="App.go('equip',{veh:'${v.id}'})">장비 상세</button>
+        ${v.amotion?`<button class="btn btn-sm btn-primary" onclick="MapView.enterAmotion()">관제 모드</button>`:
+          `<button class="btn btn-sm btn-primary" onclick="App.toast('트랙 리플레이 (프로토타입 데모)')">경로 재생</button>`}
+      </div>
+    </div>`;
+  }
+
+  function enterAmotion(){
+    state.layers['LY-03']=true; state.amotionFocus=true; focusField('GJ-R3',false); render();
+    App.toast('A-Motion 관제 모드 진입');
+  }
+
+  return { init, destroy, focusField, enterAmotion,
+    applyPreset(p){ if(!state) return; init(host,p); } };
+})();
