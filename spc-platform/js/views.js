@@ -432,12 +432,20 @@ Views.equip = {
       </div>
       <div>
         <div class="card card-pad" style="margin-bottom:14px">
-          <h3 style="margin-bottom:8px">차량등록 <span class="mono" style="font-size:10px;color:var(--ink-3)">5.1.2</span></h3>
-          <div style="display:flex;gap:10px">
-            <div class="radio-tile sel"><b>시리얼 매칭 등록</b><small>제조 정보 자동 매칭</small></div>
-            <div class="radio-tile"><b>수동 등록</b><small>타사·구형 장비</small></div>
+          <h3 style="margin-bottom:4px">차량등록 <span class="mono" style="font-size:10px;color:var(--ink-3)">5.1.2</span></h3>
+          <p style="font-size:12px;color:var(--ink-2);margin-bottom:10px">자사 장비 외 <b>브랜드별 농기계·DJI 드론·농업용 로봇</b> 등 본기를 등록할 수 있습니다.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${REGISTER_BRANDS.map((b,i)=>`
+              <div class="radio-tile ${i===0?'sel':''}" onclick="this.closest('.grid,.card').querySelectorAll('.radio-tile').forEach(t=>t.classList.remove('sel'));this.classList.add('sel')" style="display:flex;align-items:center;gap:9px">
+                <div class="lr-swatch" style="background:${b.tone};width:30px;height:30px;border-radius:9px;flex-shrink:0">${App.icon(b.icon,15)}</div>
+                <div><b style="font-size:12.5px">${b.name}</b><small style="display:block;font-size:10.5px">${b.type}</small></div>
+              </div>`).join('')}
           </div>
-          <button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center" onclick="App.toast('차량 등록 절차 시작 (데모)')">등록 진행</button>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <div class="radio-tile sel" style="flex:1;text-align:center;padding:8px"><b style="font-size:12px">QR/시리얼 스캔</b></div>
+            <div class="radio-tile" style="flex:1;text-align:center;padding:8px"><b style="font-size:12px">수동 등록</b></div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px;width:100%;justify-content:center" onclick="App.toast('본기 등록 절차 시작 — DJI/로봇 API 연동 (데모)')">등록 진행</button>
         </div>
         <div class="card card-pad">
           <h3 style="margin-bottom:8px">소유권 이전·권한공유 <span class="mono" style="font-size:10px;color:var(--ink-3)">5.1.3</span></h3>
@@ -535,7 +543,7 @@ Views.work = {
           <button class="btn btn-primary" onclick="App.go('work',{tab:'plan'})">${App.icon('plus')} 작업 계획 추가</button></div>
       </div>
       <div class="tabs">
-        ${[['status','작업현황','6.1'],['plan','작업 캘린더','6.2'],['amotion','A-Motion','6.4'],['history','작업이력','6.3'],['agency','농작업 대행','6.5']]
+        ${[['status','작업현황','6.1'],['plan','작업 캘린더','6.2'],['amotion','A-Motion','6.4'],['history','작업이력','6.3'],['datahist','데이터 히스토리','6.3.2'],['agency','농작업 대행','6.5']]
           .map(([k,n,id])=>`<button class="tab ${T===k?'active':''}" onclick="App.go('work',{tab:'${k}'})">${n}<span class="tc mono">${id}</span></button>`).join('')}
       </div>
       ${this['tab_'+T]()}
@@ -592,12 +600,152 @@ Views.work = {
       ${[['필지',f?`${f.name} (${f.id})`:'-'],['면적',fmt(j.area)+'평'],['장비',v?v.nick:'-'],['대행단',j.team||'-'],['작업시간',j.hours+'h'],['연료 사용',j.fuel+'L']]
         .map(([k,val])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--ink-3)">${k}</span><b>${val}</b></div>`).join('')}
       ${j.issue?`<div class="perm-note" style="margin-top:12px">${App.icon('sos')} <div><b>이슈</b> — ${j.issue}</div></div>`:''}
+      ${j.status==='done'?`<div style="background:linear-gradient(120deg,#FDEEEC,#FFF6F5);border:1px solid #F6D3CE;border-radius:12px;padding:13px 15px;margin-top:14px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="lr-swatch" style="background:var(--red);width:30px;height:30px;border-radius:9px">${App.icon('bot',15)}</div>
+          <div style="flex:1"><b style="font-size:13px">AI 영농일지 <span class="mono" style="font-size:9px;color:var(--ink-3)">6.2.3</span></b><br><small style="font-size:11px;color:var(--ink-3)">작업계획·차량·작업기 데이터로 자동 작성</small></div>
+          <button class="btn btn-sm btn-primary" onclick="App.closeDrawer();Views.work.diaryModal('${jid}')">${App.icon('edit')} 영농일지 생성</button>
+        </div></div>`:''}
       <div style="display:flex;gap:8px;margin-top:16px">
         ${mapBtn('맵에서 보기',{layers:['LY-02','LY-01'],focus:j.field},false)}
         ${j.status==='done'?mapBtn('작업기록(As-Applied)',{layers:['LY-04','LY-10'],focus:j.field},false):''}
         <button class="btn btn-navy" style="flex:1;justify-content:center" onclick="App.toast('이해관계자 공유 링크 생성됨')">${App.icon('share')} 공유</button>
       </div>
     `);
+  },
+
+  /* ---- 6.2.3 AI 영농일지 ---- */
+  diaryModal(jid){
+    const j=JOBS.find(x=>x.id===jid), f=FIELDS.find(x=>x.id===j.field);
+    const d=FARM_DIARY[jid] || {
+      title:`${j.name} 영농일지`, date:`2026-${j.date.replace('.','-')}`, field:j.field, area:j.area,
+      weather:'맑음 · 27℃ · 습도 64%', veh:(EQUIP.find(e=>e.id===j.veh)||{}).nick||'-', impl:'-', team:j.team||'자가작업',
+      body:`${j.date}, ${f?f.name:''} 필지(${fmt(j.area)}평)에서 ${j.name} 작업을 수행했습니다. 총 ${j.hours}시간이 소요되었으며 연료 ${j.fuel}L를 사용했습니다. 매칭된 작업계획과 차량·작업기 데이터를 기반으로 자동 작성된 일지입니다.`,
+      kpi:[['작업면적',fmt(j.area)+'평'],['작업시간',j.hours+'시간'],['연료',j.fuel+'L'],['작업유형',j.type]],
+      photos:['작업 전 (BEFORE)','작업 후 (AFTER)'],
+    };
+    App.modal(`AI 영농일지`, `
+      <div id="diaryStage" style="padding:0">
+        <div id="diaryGen" style="padding:40px 30px;text-align:center">
+          <div class="lr-swatch" style="background:var(--red);width:52px;height:52px;border-radius:15px;margin:0 auto 16px">${App.icon('bot',26)}</div>
+          <b style="font-size:15px;display:block;margin-bottom:6px">AI가 영농일지를 작성하고 있습니다</b>
+          <small style="color:var(--ink-3)">작업계획 · 차량 운행 데이터 · 작업기 데이터를 분석 중...</small>
+          <div style="max-width:320px;margin:20px auto 0">
+            ${['작업 계획 매칭','차량 운행 데이터 수집','작업기·기상 데이터 결합','일지 초안 생성'].map((s,i)=>`
+              <div class="diary-step" data-i="${i}" style="display:flex;align-items:center;gap:10px;padding:7px 0;font-size:12.5px;color:var(--ink-3);opacity:.4;transition:opacity .3s">
+                <span class="ds-ico" style="width:20px;height:20px;border-radius:50%;border:2px solid var(--line-2);display:grid;place-items:center;flex-shrink:0"></span>${s}</div>`).join('')}
+          </div>
+        </div>
+      </div>`);
+    // animate steps then reveal
+    const steps=[...document.querySelectorAll('.diary-step')];
+    steps.forEach((st,i)=>setTimeout(()=>{
+      st.style.opacity='1'; st.querySelector('.ds-ico').innerHTML=App.icon('check',13);
+      st.querySelector('.ds-ico').style.cssText='width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;flex-shrink:0';
+    }, 400+i*420));
+    setTimeout(()=>{
+      const stage=document.getElementById('diaryStage'); if(!stage) return;
+      stage.innerHTML=`
+        <div style="padding:22px 26px;max-height:64vh;overflow-y:auto">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span class="chip chip-red">${App.icon('bot',12)} AI 자동 작성</span>
+            <span class="chip chip-gray mono">${d.date}</span>
+            <span class="chip chip-gray">${f?f.name:d.field}</span>
+          </div>
+          <h2 style="font-size:18px;font-weight:800;margin:8px 0 14px">${d.title}</h2>
+          <div class="grid cols-4" style="gap:8px;margin-bottom:16px">
+            ${(d.kpi||[]).map(([k,v])=>`<div style="background:var(--surface-2);border-radius:11px;padding:11px 13px">
+              <div style="font-size:11px;color:var(--ink-3);font-weight:600">${k}</div><b style="font-size:15px">${v}</b></div>`).join('')}
+          </div>
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--ink-2);margin-bottom:14px;flex-wrap:wrap">
+            <span>${App.icon('rain',13)} ${d.weather}</span><span>${App.icon('tractor',13)} ${d.veh}</span>
+            <span>${App.icon('work',13)} ${d.impl}</span><span>${App.icon('farm',13)} ${d.team}</span>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;font-size:13.5px;line-height:1.75;color:var(--ink)">${d.body}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+            ${d.photos.map(p=>`<div class="photo-ph filled" style="aspect-ratio:16/7">${App.icon('photo',18)} ${p}</div>`).join('')}
+          </div>
+          <div class="perm-note" style="margin-top:14px">${App.icon('info')} <div>AI 초안입니다 — 내용을 검토·수정 후 확정하세요. 확정 시 <b>작업이력·보조금 증빙 리포트(10.2)</b>에 자동 연계됩니다.</div></div>
+        </div>
+        <div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="App.toast('일지를 수정 모드로 전환 (데모)')">${App.icon('edit')} 수정</button>
+          <button class="btn btn-ghost" onclick="App.toast('PDF로 내보냈습니다 (데모)')">${App.icon('download')} PDF</button>
+          <button class="btn btn-primary" onclick="App.closeModal();App.toast('영농일지가 확정·저장되었습니다 — 작업이력 연계 완료')">${App.icon('check')} 확정·저장</button>
+        </div>`;
+    }, 400+steps.length*420+300);
+  },
+
+  /* ---- 6.2.1 과거 작업 등록 (데이터 히스토리 불러오기) ---- */
+  pastJobModal(){
+    App.modal(`과거 작업 등록`, `
+      <div style="padding:22px 26px">
+        <p style="font-size:12.5px;color:var(--ink-2);margin-bottom:16px">이미 완료한 작업을 캘린더에 소급 등록합니다. 차량·작업기 <b>데이터 히스토리(6.3.2)</b>가 있으면 불러와 자동 채웁니다.</p>
+        <div class="grid cols-2" style="gap:12px">
+          <div class="field-row"><label>필지</label><select><option>안들 3 (GJ-R3)</option><option>큰들 (GJ-R8)</option></select></div>
+          <div class="field-row"><label>작업일</label><input type="text" value="2026-04-08"></div>
+          <div class="field-row"><label>작업 유형</label><select><option>경운/로터리</option><option>이앙</option><option>방제</option><option>수확</option></select></div>
+          <div class="field-row"><label>투입 차량</label><select id="pastVeh"><option value="VH-001">HX1400AI 1호기</option><option value="VH-002">GX7510ATC</option></select></div>
+        </div>
+        <div style="background:var(--blue-soft);border:1px solid #C4D6F7;border-radius:12px;padding:13px 15px;margin-top:6px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div class="lr-swatch" style="background:var(--blue);width:30px;height:30px;border-radius:9px">${App.icon('route',15)}</div>
+            <div style="flex:1"><b style="font-size:12.5px">데이터 히스토리에서 불러오기</b><br><small style="font-size:11px;color:var(--ink-2)">선택 차량의 해당일 운행 데이터(가동시간·면적·연료·경심)를 자동 입력</small></div>
+            <button class="btn btn-sm btn-primary" id="pullHist" onclick="Views.work.pullHistory()">불러오기</button>
+          </div>
+          <div id="histResult" style="margin-top:10px"></div>
+        </div>
+        <div style="padding:16px 0 0;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
+          <button class="btn btn-primary" onclick="App.closeModal();App.toast('과거 작업이 등록되었습니다 — 작업이력·데이터 히스토리 연계 완료')">${App.icon('check')} 등록</button>
+        </div>
+      </div>`);
+  },
+  pullHistory(){
+    const box=document.getElementById('histResult');
+    box.innerHTML=`<div class="ai-typing" style="background:#fff"><i></i><i></i><i></i></div>`;
+    setTimeout(()=>{
+      const h=WORK_HISTORY['VH-001'].find(x=>x.src==='과거 등록')||WORK_HISTORY['VH-001'][3];
+      box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        ${[['가동시간',h.hours+'h'],['작업면적',fmt(h.area)+'평'],['연료',h.fuel+'L'],['경심',h.depth],['평균속도',h.avgSpeed+'km/h']]
+          .map(([k,v])=>`<span class="chip chip-blue">${k} ${v}</span>`).join('')}</div>
+        <small style="font-size:11px;color:var(--green);font-weight:700;display:block;margin-top:6px">✓ TMU 운행 데이터를 불러와 자동 입력했습니다</small>`;
+    },900);
+  },
+
+  /* ---- 6.3.2 작업 데이터 히스토리 ---- */
+  histVeh:'VH-001',
+  tab_datahist(){
+    const list=EQUIP.filter(v=>WORK_HISTORY[v.id]);
+    const rows=WORK_HISTORY[this.histVeh]||[];
+    const totH=rows.reduce((s,r)=>s+r.hours,0), totA=rows.reduce((s,r)=>s+r.area,0), totF=rows.reduce((s,r)=>s+r.fuel,0);
+    return `<div class="perm-note">${App.icon('info')} <div>차량·작업기별 <b>운행/작업 데이터 히스토리</b>를 시계열로 조회합니다. 과거 작업 등록(6.2.1) 시 이 데이터를 불러올 수 있습니다.</div></div>
+    <div class="filter-bar">
+      <div class="seg">
+        ${list.map(v=>`<button class="${this.histVeh===v.id?'active':''}" onclick="Views.work.histVeh='${v.id}';App.rerender()">${v.model}</button>`).join('')}
+      </div>
+      <select class="f-select"><option>작업기 전체</option><option>로터리 WJ2000</option><option>붐스프레이어</option></select>
+      <div style="margin-left:auto">${mapBtn('주행경로 이력 맵',{layers:['LY-05','LY-04','LY-10']})}</div>
+    </div>
+    <div class="grid cols-4" style="margin-bottom:16px">
+      ${[['누적 가동시간',totH.toFixed(1),'h'],['누적 작업면적',fmt(totA),'평'],['누적 연료',fmt(totF),'L'],['기록 건수',rows.length,'건']]
+        .map(([l,v,u])=>`<div class="card kpi" style="padding:14px 18px"><div class="k-label">${l}</div><div class="k-value" style="font-size:23px">${v}<small>${u}</small></div></div>`).join('')}
+    </div>
+    <div class="grid" style="grid-template-columns:1.3fr .7fr">
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>작업일</th><th>작업</th><th>작업기</th><th class="t-num">가동(h)</th><th class="t-num">면적(평)</th><th class="t-num">연료(L)</th><th class="t-num">평균속도</th><th>출처</th></tr></thead>
+        <tbody>${rows.map(r=>`
+          <tr onclick="App.toast('${r.date} 상세 운행 데이터 — 경로·속도 프로파일 (데모)')">
+            <td class="mono" style="font-size:12px">${r.date}</td><td class="t-strong">${r.job}</td><td style="font-size:12px">${r.impl}</td>
+            <td class="t-num">${r.hours}</td><td class="t-num">${fmt(r.area)}</td><td class="t-num">${r.fuel}</td><td class="t-num">${r.avgSpeed}km/h</td>
+            <td><span class="chip ${r.src==='A-Motion'?'chip-purple':r.src==='대행'?'chip-blue':r.src==='과거 등록'?'chip-amber':'chip-gray'}">${r.src}</span></td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="card card-pad">
+        <h3 style="margin-bottom:10px">월별 가동시간</h3>
+        ${Charts.bars(['4월','5월','6월','7월'],[2.8,5.5,2.9,1.6],{h:130,color:'#2E6BE6'})}
+        <div class="deep-note" style="margin-top:10px">${App.icon('route')} 차량 운행·작업기 데이터는 TMU/ISOBUS에서 수집되어 차량별로 축적됩니다</div>
+      </div>
+    </div>`;
   },
 
   /* ---- 6.2 캘린더 ---- */
@@ -618,7 +766,8 @@ Views.work = {
         <div class="filter-bar" style="margin-bottom:12px">
           <div class="seg"><button class="active">월</button><button onclick="App.toast('주간 뷰 (데모)')">주</button></div>
           <b style="font-size:15px;margin-left:6px">2026년 7월</b>
-          <div style="margin-left:auto" class="deep-note">${App.icon('bot')} AI to-do 제안: 3건 <span style="color:var(--red);font-weight:800;cursor:pointer" onclick="App.openAI('todo')">보기</span></div>
+          <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="Views.work.pastJobModal()">${App.icon('plus')} 과거 작업 등록</button>
+          <div class="deep-note">${App.icon('bot')} AI to-do 제안: 3건 <span style="color:var(--red);font-weight:800;cursor:pointer" onclick="App.openAI('todo')">보기</span></div>
         </div>
         <div class="cal">
           <div class="cal-head">${['일','월','화','수','목','금','토'].map(d=>`<div>${d}</div>`).join('')}</div>
@@ -692,8 +841,14 @@ Views.work = {
       <div class="card kpi"><div class="k-label">평균 작업효율</div><div class="k-value">356<small>평/h</small></div><div class="k-delta up">▲ +9% 전월</div></div>
       <div class="card kpi"><div class="k-label">연료 원단위</div><div class="k-value">0.026<small>L/평</small></div><div class="k-delta up">▲ 개선</div></div>
     </div>
+    <div class="card card-pad" style="margin-bottom:16px;display:flex;align-items:center;gap:14px;background:linear-gradient(120deg,#FFF6F5,#FCFBFA)">
+      <div class="lr-swatch" style="background:var(--red);width:40px;height:40px;border-radius:12px">${App.icon('bot',20)}</div>
+      <div style="flex:1"><b style="font-size:14px">AI 영농일지 <span class="mono" style="font-size:10px;color:var(--ink-3)">6.2.3</span></b>
+        <p style="font-size:12px;color:var(--ink-2);margin-top:2px">완료된 작업의 계획·차량·작업기 데이터를 결합해 영농일지를 자동 작성합니다. 아래 목록의 <b>[일지]</b> 버튼으로 생성하세요.</p></div>
+      <button class="btn btn-primary" onclick="Views.work.diaryModal('JOB-101')">${App.icon('edit')} 샘플 영농일지 보기</button>
+    </div>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>작업</th><th>필지</th><th>일자</th><th>장비/작업기</th><th class="t-num">시간</th><th class="t-num">연료(L)</th><th class="t-num">효율(평/h)</th><th></th></tr></thead>
+      <thead><tr><th>작업</th><th>필지</th><th>일자</th><th>장비/작업기</th><th class="t-num">시간</th><th class="t-num">연료(L)</th><th class="t-num">효율(평/h)</th><th>기록</th><th>영농일지</th></tr></thead>
       <tbody>${done.concat([{id:'JOB-098',name:'큰들 이앙',field:'GJ-R8',date:'06.12',veh:'VH-005',hours:5.5,fuel:24,area:2210},
         {id:'JOB-092',name:'안들 2 로터리',field:'GJ-R2',date:'05.28',veh:'VH-001',hours:3.1,fuel:19,area:1216}]).map(j=>{
         const f=FIELDS.find(x=>x.id===j.field), v=EQUIP.find(e=>e.id===j.veh);
@@ -704,6 +859,7 @@ Views.work = {
           <td class="t-num">${j.hours}h</td><td class="t-num">${j.fuel}</td>
           <td class="t-num t-strong">${j.hours?fmt(Math.round(j.area/j.hours)):'-'}</td>
           <td><button class="btn btn-sm btn-map" onclick='event.stopPropagation();App.go("map",{layers:["LY-04","LY-05","LY-10"],focus:${JSON.stringify(j.field)}})'>${App.icon('map',13)} 기록 맵</button></td>
+          <td><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();Views.work.diaryModal('${j.id}')">${App.icon('bot',13)} 일지</button></td>
         </tr>`;}).join('')}</tbody>
     </table></div>
     <div class="deep-note" style="margin-top:12px">${App.icon('map')} 주행경로·As-Applied 지도는 통합 모니터링의 기록 레이어(LY-04·05)에서 표시됩니다 — 본 화면은 목록·분석 전담</div>`;
@@ -741,7 +897,7 @@ Views.work = {
       <span class="chip chip-blue">온라인 ${APPLICANTS.filter(a=>a.ch==='온라인').length}</span>
       <span class="chip chip-amber">오프라인 ${APPLICANTS.filter(a=>a.ch==='오프라인').length}</span>
       <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="App.toast('엑셀 다운로드 (데모)')">${App.icon('download')} 엑셀 다운로드</button>
-      <button class="btn btn-sm btn-ghost" onclick="App.toast('오프라인 접수 지원 — 서면 신청 업로드 (데모)')">${App.icon('upload')} 오프라인 접수 업로드</button>
+      <button class="btn btn-sm btn-primary" onclick="Views.work.ocrModal()">${App.icon('bot')} 오프라인 접수 AI OCR</button>
     </div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th style="width:36px"></th><th>상태</th><th>농가</th><th>필지 정보</th><th class="t-num">면적(평)</th><th>작업</th><th>매칭 대행단</th><th class="t-num">예상가격</th></tr></thead>
@@ -767,6 +923,54 @@ Views.work = {
     </div>`;
   },
   toggleApplicant(i){ const s=this.selApplicants; s.has(i)?s.delete(i):s.add(i); App.rerender(); },
+  /* ---- 6.5.1 오프라인 접수 AI OCR ---- */
+  ocrModal(){
+    const o=OCR_EXTRACT;
+    App.modal(`오프라인 접수 AI OCR 자동 등록`, `
+      <div style="display:grid;grid-template-columns:1fr 1fr;min-height:440px">
+        <div style="background:var(--navy);padding:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px">
+          <div style="width:100%;max-width:260px;aspect-ratio:3/4;background:linear-gradient(160deg,#F4EFE4,#E6DECB);border-radius:10px;position:relative;box-shadow:var(--shadow-lg);overflow:hidden">
+            <div style="padding:16px 18px;color:#5A5340;font-size:10px;line-height:2.1">
+              <div style="text-align:center;font-weight:800;font-size:13px;color:#3A3527;margin-bottom:10px;border-bottom:1.5px solid #9A917A;padding-bottom:6px">농작업대행 신청서</div>
+              ${o.fields.map(([k,v])=>`<div style="display:flex;gap:6px;margin-bottom:7px"><span style="color:#8A8068;width:64px">${k}</span><span style="border-bottom:1px solid #B5AC93;flex:1;font-family:cursive;color:#2E2A1E">${v.replace(/#/g,'○')}</span></div>`).join('')}
+            </div>
+            <div id="ocrScan" style="position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,transparent,#5BE49B,transparent);box-shadow:0 0 12px #5BE49B"></div>
+          </div>
+          <div style="color:#A6B1BF;font-size:11.5px;font-weight:600">${o.doc}</div>
+        </div>
+        <div style="padding:22px 24px;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:4px">
+            <div class="lr-swatch" style="background:var(--red);width:32px;height:32px;border-radius:10px">${App.icon('bot',16)}</div>
+            <div><b style="font-size:14px">AI OCR 인식 결과</b><br><small style="font-size:11px;color:var(--ink-3)">서면 신청서를 자동 인식해 접수 필드로 구조화</small></div>
+            <span class="chip chip-green" style="margin-left:auto" id="ocrConf">인식률 —</span>
+          </div>
+          <div id="ocrFields" style="flex:1;margin-top:12px"></div>
+          <div class="perm-note" style="margin:12px 0 0;font-size:11.5px">${App.icon('info')} <div>낮은 신뢰도(&lt;95%) 필드는 <b style="color:var(--amber)">주황색</b>으로 표시됩니다 — 확인 후 등록하세요.</div></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+            <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
+            <button class="btn btn-primary" id="ocrReg" disabled style="opacity:.5" onclick="App.closeModal();App.toast('신청 1건이 접수 목록에 자동 등록되었습니다 (정순금 · 옥동리 145)')">${App.icon('check')} 접수 등록</button>
+          </div>
+        </div>
+      </div>`);
+    // scan animation
+    const scan=document.getElementById('ocrScan');
+    let y=0; const iv=setInterval(()=>{ y=(y+4)%100; if(scan) scan.style.top=y+'%'; },30);
+    setTimeout(()=>{
+      clearInterval(iv); if(scan) scan.style.display='none';
+      const box=document.getElementById('ocrFields'); if(!box) return;
+      box.innerHTML=o.fields.map(([k,v,c],i)=>{
+        const low=parseInt(c)<95;
+        return `<div class="ocr-field" style="opacity:0;transform:translateY(6px);display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);transition:all .3s ${i*0.08}s">
+          <span style="width:74px;font-size:11.5px;color:var(--ink-3);font-weight:600">${k}</span>
+          <b style="flex:1;font-size:13px">${v}</b>
+          <span class="chip ${low?'chip-amber':'chip-green'}" style="font-size:10px">${c}</span>
+        </div>`;
+      }).join('');
+      requestAnimationFrame(()=>box.querySelectorAll('.ocr-field').forEach(f=>{f.style.opacity='1';f.style.transform='none';}));
+      const conf=document.getElementById('ocrConf'); if(conf) conf.textContent=`인식률 ${o.confidence}%`;
+      const reg=document.getElementById('ocrReg'); if(reg){ reg.disabled=false; reg.style.opacity='1'; }
+    }, 1600);
+  },
   agProgress(){
     return `<div class="grid" style="grid-template-columns:.9fr 1.1fr">
       <div>
