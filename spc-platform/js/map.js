@@ -19,10 +19,11 @@ const MapView = (() => {
   const RAMPS = {
     soil:  t=> t<.5? hexLerp('#C9A227','#9C6B3F',t*2) : hexLerp('#9C6B3F','#5C3D22',(t-.5)*2),
     ndvi:  t=> t<.5? hexLerp('#D9534F','#E8D44D',t*2) : hexLerp('#E8D44D','#1E8F4E',(t-.5)*2),
-    yield: t=> t<.5? hexLerp('#F0E4B0','#D9B93B',t*2) : hexLerp('#D9B93B','#8F6D0A',(t-.5)*2),
+    /* 면적당 수확량: 낮음(빨강)→주황→연두(중간)→파랑(높음) */
+    yield: t=> t<.33? hexLerp('#D6392E','#F2933D',t/.33) : t<.66? hexLerp('#F2933D','#BFDCA1',(t-.33)/.33) : hexLerp('#BFDCA1','#4C86C6',(t-.66)/.34),
     vrt:   t=> t<.5? hexLerp('#CDEFEA','#3FB2A1',t*2) : hexLerp('#3FB2A1','#0F5E54',(t-.5)*2),
   };
-  const RAMP_LABEL = { soil:['유기물 낮음','높음','soil'], ndvi:['NDVI 0.2','0.9','ndvi'], yield:['400kg/10a','650kg','yield'], vrt:['16kg/10a','33kg','vrt'] };
+  const RAMP_LABEL = { soil:['유기물 낮음','높음','soil'], ndvi:['NDVI 0.2','0.9','ndvi'], yield:['낮음','높음','yield'], vrt:['16kg/10a','33kg','vrt'] };
 
   /* serpentine work path inside field bbox */
   function serpentine(f, rows=6){
@@ -51,8 +52,8 @@ const MapView = (() => {
       stop: 'vrt',
       playing:false, compare:false,
       view:{x:0,y:0,w:1200,h:800},
-      selField:null, selVeh:null, amotionFocus:false,
-      base:'sat',
+      selField:null, selVeh:null, amotionFocus:false, amPaused:false,
+      base:'sat', recPeriod:'season',
       vehProg:{ 'VH-001':0.42, 'VH-002':0.65 },
       vehDist:{}, movDist:0,
     };
@@ -123,7 +124,10 @@ const MapView = (() => {
           </div>
           <button class="tl-compare ${s.compare?'active':''}" id="tlCompare">2분할 비교</button>
         </div>
-        ${s.amotionFocus && s.layers['LY-03'] ? renderAmotionStrip() : ''}
+        <div class="map-left-stack">
+          ${s.amotionFocus && s.layers['LY-03'] ? renderAmotionStrip() : ''}
+          ${(s.layers['LY-04']||s.layers['LY-05']) ? renderRecordPanel() : ''}
+        </div>
         <div id="mapPop"></div>
       </div>
       ${renderDock()}
@@ -137,12 +141,17 @@ const MapView = (() => {
     const s=state; const rows=[];
     if(s.layers['LY-01']) rows.push(`<div class="ml-row"><i style="background:#0E9F5A"></i>작업중</div><div class="ml-row"><i style="background:#2E6BE6"></i>이동중</div><div class="ml-row"><i style="background:#9AA3AF"></i>유휴</div><div class="ml-row"><i style="background:#E5352C"></i>정비필요</div>`);
     const agro = activeAgroLayer();
-    if (agro && s.layers[agro]){
-      const key = {'LY-06':'soil','LY-07':'ndvi','LY-08':'yield','LY-09':'vrt'}[agro];
+    if (agro && agro!=='LY-08' && s.layers[agro]){
+      const key = {'LY-06':'soil','LY-07':'ndvi','LY-09':'vrt'}[agro];
       const [lo,hi]=RAMP_LABEL[key];
       const grad = `linear-gradient(90deg, ${RAMPS[key](0)}, ${RAMPS[key](.5)}, ${RAMPS[key](1)})`;
       rows.push(`<div class="ml-title" style="margin-top:4px">${LAYERS.find(l=>l.id===agro).name}</div>
         <div class="ml-grad" style="background:${grad}"></div><div class="ml-grad-lab"><span>${lo}</span><span>${hi}</span></div>`);
+    }
+    if (s.layers['LY-08']){
+      const grad = `linear-gradient(90deg, ${RAMPS.yield(0)}, ${RAMPS.yield(.33)}, ${RAMPS.yield(.66)}, ${RAMPS.yield(1)})`;
+      rows.push(`<div class="ml-title" style="margin-top:4px">면적당 수확량</div>
+        <div class="ml-grad" style="background:${grad}"></div><div class="ml-grad-lab"><span>낮음</span><span>중간</span><span>높음</span></div>`);
     }
     if(!rows.length) return '';
     return `<div class="map-legend"><div class="ml-title">범례</div>${rows.join('')}</div>`;
@@ -150,17 +159,50 @@ const MapView = (() => {
 
   function renderAmotionStrip(){
     const j = JOBS.find(j=>j.id==='JOB-104'), v = EQUIP.find(e=>e.id==='VH-001');
+    const paused = state.amPaused;
     return `<div class="amotion-strip">
-      <div class="as-head">${App.icon('bot')} A-Motion 관제 — ${v.nick}</div>
+      <div class="as-head">${App.icon('bot')} A-Motion 관제 — ${v.nick}
+        <button class="as-x" onclick="MapView.closeAmotion()" title="관제 팝업 닫기">${App.icon('x',14)}</button></div>
       <div class="as-body">
         <div class="as-stat"><span>작업</span><b>${j.name}</b></div>
+        <div class="as-stat"><span>상태</span><b>${paused?'<span class="chip chip-amber"><span class="cd" style="background:currentColor"></span>일시정지</span>':'<span class="chip chip-green"><span class="cd" style="background:currentColor"></span>자율작업 중</span>'}</b></div>
         <div class="as-stat"><span>진행률</span><b id="amProg">${Math.round(state.vehProg['VH-001']*100)}%</b></div>
         <div class="as-stat"><span>경심 깊이 / 작업 단수</span><b>${j.depth} / ${j.rows}단</b></div>
         <div class="as-stat"><span>이상감지 이벤트</span><b style="color:var(--green)">0건</b></div>
         <div class="as-stat"><span>계획 대비 경로 이탈</span><b>±4cm (RTK)</b></div>
         <div class="as-actions">
           <button class="btn btn-sm btn-ghost" style="flex:1" onclick="App.toast('제어권은 현장 모바일 단말에 있습니다 (App 전용)')">${App.icon('phone')} 제어권</button>
-          <button class="btn btn-sm btn-primary" style="flex:1" onclick="App.toast('원격 일시정지 명령을 전송했습니다')">${App.icon('pause')} 일시정지</button>
+          <button class="btn btn-sm ${paused?'btn-navy':'btn-primary'}" style="flex:1" onclick="MapView.toggleAmPause()">${App.icon(paused?'play':'pause')} ${paused?'작업 재개':'일시정지'}</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  /* 기록 레이어(LY-04/05) 기간 조회 패널 */
+  const REC_PERIODS = [ ['7d','최근 7일','07.15'], ['30d','최근 30일','06.22'], ['season',"'26 시즌",'02.01'] ];
+  function recCutoff(){ return REC_PERIODS.find(p=>p[0]===state.recPeriod)[2]; }
+  function recJobs(){
+    const cut=recCutoff();
+    return JOBS.filter(j=>j.status==='done' && j.veh && j.date>=cut);
+  }
+  function renderRecordPanel(){
+    const jobs=recJobs();
+    return `<div class="amotion-strip" style="width:290px">
+      <div class="as-head" style="background:linear-gradient(120deg,#8A6D1C,#6E570F)">${App.icon('layers')} 작업·주행 기록 조회
+        <span style="margin-left:auto;font-size:10px;font-weight:600;color:rgba(255,255,255,.7)">LY-04 · LY-05</span></div>
+      <div class="as-body">
+        <div style="display:flex;gap:5px;margin-bottom:9px">
+          ${REC_PERIODS.map(([k,l])=>`<button class="preset-pill ${state.recPeriod===k?'active':''}" style="flex:1" onclick="MapView.setRecPeriod('${k}')">${l}</button>`).join('')}
+        </div>
+        <div class="as-stat"><span>기간 내 기록</span><b>작업 ${jobs.length}건 · 경로 ${jobs.length}건</b></div>
+        <div style="max-height:150px;overflow-y:auto;margin-top:5px">
+        ${jobs.length? jobs.map(j=>{const f=FIELDS.find(x=>x.id===j.field);
+          return `<div style="display:flex;align-items:center;gap:7px;padding:6px 0;border-top:1px solid var(--line);font-size:11.5px;cursor:pointer" onclick="MapView.focusField('${j.field}')">
+            <span class="mono" style="color:var(--ink-3);font-size:10px">${j.date}</span>
+            <b style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.name}</b>
+            <span style="color:var(--ink-3);font-size:10.5px">${f?f.name:''}</span>${App.icon('chev',11)}
+          </div>`;}).join('')
+        : `<div style="padding:10px 0;text-align:center;color:var(--ink-3);font-size:11.5px">선택 기간에 기록이 없습니다</div>`}
         </div>
       </div>
     </div>`;
@@ -268,11 +310,11 @@ const MapView = (() => {
   function fieldSVG(f, sat){
     const s=state, sel=s.selField===f.id;
     const agro = activeAgroLayer();
-    const showZones = agro && s.layers[agro];
+    const showZones = agro && agro!=='LY-08' && s.layers[agro];
     const b=bboxOf(f.poly);
     let zones='';
     if (showZones){
-      const key={'LY-06':'soil','LY-07':'ndvi','LY-08':'yield','LY-09':'vrt'}[agro];
+      const key={'LY-06':'soil','LY-07':'ndvi','LY-09':'vrt'}[agro];
       const dataKey = key==='ndvi' && state.stop==='growth2' ? 'ndvi2' : key;
       const vals = ZONES[f.id][dataKey] || ZONES[f.id][key];
       const op = s.opacity[agro]/100;
@@ -281,6 +323,28 @@ const MapView = (() => {
         const gx=b.x+(i%4)*gw, gy=b.y+Math.floor(i/4)*gh;
         zones+=`<rect class="zone" x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="${RAMPS[key](t)}" opacity="${op}"/>`;
       });
+    }
+    /* 수확량 그리드맵 (LY-08) — 모산들(GJ-R6) 전용 5×5m 셀 그래픽 */
+    if (s.layers['LY-08'] && f.id==='GJ-R6'){
+      const op=s.opacity['LY-08']/100;
+      const COLS=13, ROWS=10, gw=b.w/COLS, gh=b.h/ROWS;
+      zones+=`<clipPath id="yclip"><polygon points="${ptsStr(f.poly)}"/></clipPath><g clip-path="url(#yclip)">`;
+      for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+        /* 중심 높음(파랑) → 가장자리 낮음(빨강) + 노이즈 */
+        const nx=(c+0.5)/COLS-0.5, ny=(r+0.5)/ROWS-0.5;
+        const edge=Math.max(Math.abs(nx)*2, Math.abs(ny)*2);            // 0 center → 1 edge
+        const noise=(Math.sin(c*3.7+r*5.1)+Math.sin(c*1.3-r*2.9))*0.09;
+        const t=Math.max(0,Math.min(1, 1-Math.pow(edge,1.6)+noise));
+        zones+=`<rect x="${b.x+c*gw}" y="${b.y+r*gh}" width="${gw}" height="${gh}" fill="${RAMPS.yield(t)}" opacity="${op}" stroke="rgba(255,255,255,.35)" stroke-width="0.5" pointer-events="none"/>`;
+      }
+      zones+=`</g>
+      <polygon points="${ptsStr(f.poly)}" fill="none" stroke="#fff" stroke-width="2.2" pointer-events="none"/>
+      <g transform="translate(${b.x},${b.y-14})" pointer-events="none">
+        <rect x="0" y="-11" width="64" height="20" rx="6" fill="#fff" filter="url(#soft)"/>
+        <text x="32" y="3" text-anchor="middle" font-size="10" font-weight="800" fill="#181C22" font-family="var(--font)">5 × 5 (m)</text></g>
+      <g transform="translate(${b.x+b.w},${b.y-14})" pointer-events="none">
+        <rect x="-142" y="-11" width="142" height="20" rx="6" fill="#fff" filter="url(#soft)"/>
+        <text x="-71" y="3" text-anchor="middle" font-size="9.5" font-weight="800" fill="#181C22" font-family="var(--font)">총 수확량 : 4,030.4 kg</text></g>`;
     }
     const boundary = s.layers['LY-10'];
     return `<g>
@@ -301,7 +365,7 @@ const MapView = (() => {
       const f=FIELDS.find(x=>x.id===j.field); if(!f) return;
       const b=bboxOf(f.poly);
       const prog = s.vehProg[j.veh] ?? j.prog/100;
-      const color = j.type==='A-Motion' ? '#6E56CF' : (j.status==='issue'?'#E5352C':'#2E6BE6');
+      const color = j.amotion ? '#6E56CF' : (j.status==='issue'?'#E5352C':'#2E6BE6');
       const op=s.opacity['LY-02']/100;
       out+=`<g class="cov-poly">
         <clipPath id="clip-${j.id}"><polygon points="${ptsStr(f.poly)}"/></clipPath>
@@ -313,9 +377,9 @@ const MapView = (() => {
         </g>
       </g>`;
     });
-    /* as-applied 기록 레이어 */
+    /* as-applied 기록 레이어 — 기간 필터 적용 */
     if (s.layers['LY-04']){
-      JOBS.filter(j=>j.status==='done'&&j.veh).forEach(j=>{
+      recJobs().forEach(j=>{
         const f=FIELDS.find(x=>x.id===j.field); if(!f)return;
         const b=bboxOf(f.poly); const op=s.opacity['LY-04']/100;
         for(let i=0;i<6;i++){
@@ -323,6 +387,9 @@ const MapView = (() => {
           out+=`<rect x="${b.x+4}" y="${b.y+4+i*(b.h-8)/6}" width="${b.w-8}" height="${(b.h-8)/6-1.5}" rx="2"
             fill="${hexLerp('#F2C14E','#C56A1D',t)}" opacity="${.5*op}" pointer-events="none"/>`;
         }
+        out+=`<g transform="translate(${b.x+b.w/2},${b.y+b.h-12})" pointer-events="none">
+          <rect x="-42" y="-9" width="84" height="16" rx="8" fill="rgba(32,39,47,.82)"/>
+          <text y="3" text-anchor="middle" font-size="8.5" font-weight="700" fill="#F2C14E" font-family="var(--font)">${j.date} ${j.type||''}</text></g>`;
       });
     }
     return out;
@@ -339,8 +406,15 @@ const MapView = (() => {
 
   function routeSVG(){
     const op=state.opacity['LY-05']/100;
-    const d='M '+ROAD.map(p=>p.join(' ')).join(' L ');
-    return `<path class="route-line" d="${d}" stroke="#8B94A3" stroke-width="2.4" opacity="${.7*op}" stroke-dasharray="2 6"/>`;
+    /* 기간 내 완료 작업의 필지 내 주행 트랙 표시 */
+    return recJobs().map(j=>{
+      const f=FIELDS.find(x=>x.id===j.field); if(!f) return '';
+      const pts=serpentine(f,6);
+      const d='M '+pts.map(p=>p.join(' ')).join(' L ');
+      return `<path class="route-line" d="${d}" stroke="#E8EDF2" stroke-width="1.6" opacity="${.75*op}" stroke-dasharray="3 5"/>
+        <circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="3" fill="#5BE49B" opacity="${op}"/>
+        <circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="3" fill="#E5352C" opacity="${op}"/>`;
+    }).join('');
   }
 
   function vehiclesSVG(){
@@ -368,12 +442,13 @@ const MapView = (() => {
     raf=requestAnimationFrame(loop);
     if(!state||!host) return;
     if(ts-last<50) return; const dt=Math.min(0.2,(ts-last)/1000||0.05); last=ts;
-    /* progress working vehicles */
+    /* progress working vehicles (A-Motion 일시정지 시 VH-001 정지) */
     ['VH-001','VH-002'].forEach(id=>{
       if(!state.layers['LY-01']&&!state.layers['LY-02'])return;
+      if(id==='VH-001'&&state.amPaused)return;
       state.vehProg[id]=Math.min(0.995, (state.vehProg[id]??0.4)+dt*0.004);
     });
-    state.movDist=(state.movDist+dt*46)%pathLength(ROAD);
+    state.movDist=state.movDist+dt*34;
     positionVehicles();
     /* timeline autoplay */
     if(state.playing){
@@ -393,7 +468,11 @@ const MapView = (() => {
         const L=pathLength(pts);
         const p=pointAt(pts, L*(state.vehProg[v.id]??0.4)); x=p.x;y=p.y;ang=p.ang;
       } else if (v.status==='move'){
-        const p=pointAt(ROAD, state.movDist); x=p.x;y=p.y;ang=p.ang;
+        /* DK6020: 옥산 대전(GJ-R10) 필지 내부를 순환 이동 */
+        const f=FIELDS.find(ff=>ff.id===(v.field||'GJ-R10'));
+        const pts=serpentine(f,5);
+        const L=pathLength(pts);
+        const p=pointAt(pts, state.movDist%L); x=p.x;y=p.y;ang=p.ang;
       } else {
         const spots={ 'VH-004':[985,240],'VH-005':[1000,300],'VH-006':[1010,360] };
         [x,y]=spots[v.id]||[1000,300+Math.random()*10];
@@ -467,6 +546,7 @@ const MapView = (() => {
       if(e.target.closest('input'))return;
       const id=r.dataset.layer; state.layers[id]=!state.layers[id];
       if(id==='LY-03'&&state.layers[id]) state.amotionFocus=true;
+      if(id==='LY-08'&&state.layers[id]){ focusField('GJ-R6', false); App.toast("수확량 맵 — 모산들(GJ-R6) '25 수확 데이터"); }
       if(LAYERS.find(l=>l.id===id).timeline && state.layers[id]){
         const stop=TIME_STOPS.find(s=>s.layer===id&&!s.future); if(stop) state.stop=stop.id;
         LAYERS.filter(l=>l.timeline&&l.id!==id).forEach(l=>state.layers[l.id]=false);
@@ -570,6 +650,14 @@ const MapView = (() => {
     App.toast('A-Motion 관제 모드 진입');
   }
 
-  return { init, destroy, focusField, enterAmotion,
+  function closeAmotion(){ state.amotionFocus=false; render(); }
+  function toggleAmPause(){
+    state.amPaused=!state.amPaused;
+    App.toast(state.amPaused?'HX1400AI 1호기 원격 일시정지 — 차량이 정지했습니다':'자율작업을 재개했습니다');
+    render();
+  }
+  function setRecPeriod(p){ state.recPeriod=p; render(); }
+
+  return { init, destroy, focusField, enterAmotion, closeAmotion, toggleAmPause, setRecPeriod,
     applyPreset(p){ if(!state) return; init(host,p); } };
 })();

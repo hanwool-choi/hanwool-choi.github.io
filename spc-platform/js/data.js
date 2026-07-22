@@ -113,7 +113,7 @@ const EQUIP = [
   { id:'VH-002', model:'GX7510ATC', type:'트랙터', nick:'GX7510 (모델봉)', owner:'코코대행단', status:'work', amotion:false,
     fuel:58, def:71, hours:2107, todayH:4.1, field:'GJ-R8', job:'JOB-102', speed:7.4, dtc:0, fw:'v1.9.0', tmu:'TMU-5521' },
   { id:'VH-003', model:'DK6020', type:'트랙터', nick:'DK6020 (김철수)', owner:'김철수', status:'move', amotion:false,
-    fuel:81, def:55, hours:864, todayH:1.8, field:null, job:null, speed:18.2, dtc:0, fw:'v1.7.2', tmu:'TMU-3308' },
+    fuel:81, def:55, hours:864, todayH:1.8, field:'GJ-R10', job:null, speed:8.4, dtc:0, fw:'v1.7.2', tmu:'TMU-3308' },
   { id:'VH-004', model:'DSC85', type:'콤바인', nick:'DSC85 스마트콤바인', owner:'김제 농협', status:'idle', amotion:false,
     fuel:44, def:38, hours:655, todayH:0, field:null, job:null, speed:0, dtc:1, dtcCode:'P2263', fw:'v2.1.0', tmu:'TMU-7745' },
   { id:'VH-005', model:'DRP80', type:'이앙기', nick:'DRP80 이앙기', owner:'김제 농협', status:'idle', amotion:false,
@@ -132,34 +132,62 @@ const IMPLEMENTS = [
   { id:'IM-05', name:'파종기 DS-8', type:'파종기', maker:'대동', linked:null, smart:false },
 ];
 
-/* ---------- 작업 ---------- */
+/* ---------- 작업 ----------
+   cat: 대분류(일반/대행) · type: 작업유형 10종 · amotion: 자율작업 여부 */
+const WORKTYPES = ['경운/정지','균평','토양진단','변량시비 맵','시비','이앙','파종','방제','생육진단','수확'];
+const WT_CHIP = { '경운/정지':'chip-gray','균평':'chip-gray','토양진단':'chip-green','생육진단':'chip-green',
+  '변량시비 맵':'chip-teal','시비':'chip-teal','이앙':'chip-blue','파종':'chip-blue','방제':'chip-amber','수확':'chip-gold' };
 const JOBS = [
-  { id:'JOB-101', name:'안들 1 로터리', type:'대행',     status:'done',  field:'GJ-R1', veh:'VH-002', prog:100, date:'07.18', area:1216, team:'코코대행단', hours:3.4, fuel:31 },
-  { id:'JOB-102', name:'큰들 방제(항공)', type:'대행',   status:'run',   field:'GJ-R8', veh:'VH-002', prog:65,  date:'07.22', area:2210, team:'김재용 대행단', hours:2.1, fuel:18 },
-  { id:'JOB-103', name:'윗배미 예초',    type:'일반',    status:'wait',  field:'GJ-R4', veh:'VH-003', prog:0,   date:'07.23', area:987,  team:null, hours:0, fuel:0 },
-  { id:'JOB-104', name:'안들 3 심경 로터리', type:'A-Motion', status:'run', field:'GJ-R3', veh:'VH-001', prog:42, date:'07.22', area:1230, team:null, hours:1.6, fuel:14, depth:'22cm', rows:14 },
-  { id:'JOB-105', name:'아랫배미 시비(VRT)', type:'대행', status:'wait', field:'GJ-R5', veh:'VH-005', prog:0,  date:'07.24', area:1054, team:'오씨대행단', hours:0, fuel:0, vrt:true },
-  { id:'JOB-106', name:'부식리들 밀 수확', type:'대행',  status:'issue', field:'GJ-R9', veh:'VH-004', prog:23, date:'07.21', area:1875, team:'소망대행단', hours:1.2, fuel:9, issue:'DTC P2263 — 요소수 품질 센서' },
-  { id:'JOB-107', name:'모산들 물꼬 점검', type:'일반',  status:'done',  field:'GJ-R6', veh:null,   prog:100, date:'07.20', area:1192, team:null, hours:0.8, fuel:0 },
+  { id:'JOB-101', name:'안들 1 경운(로터리)', cat:'대행', type:'경운/정지', status:'done',  field:'GJ-R1', veh:'VH-002', prog:100, date:'07.18', area:1216, team:'코코대행단', hours:3.4, fuel:31 },
+  { id:'JOB-102', name:'큰들 방제(항공)', cat:'대행', type:'방제',   status:'run',   field:'GJ-R8', veh:'VH-002', prog:65,  date:'07.22', area:2210, team:'김재용 대행단', hours:2.1, fuel:18 },
+  { id:'JOB-103', name:'윗배미 잡초 방제', cat:'일반', type:'방제',    status:'wait',  field:'GJ-R4', veh:'VH-003', prog:0,   date:'07.23', area:987,  team:null, hours:0, fuel:0 },
+  { id:'JOB-104', name:'안들 3 심경 로터리', cat:'일반', type:'경운/정지', amotion:true, status:'run', field:'GJ-R3', veh:'VH-001', prog:42, date:'07.22', area:1230, team:null, hours:1.6, fuel:14, depth:'22cm', rows:14 },
+  { id:'JOB-105', name:'아랫배미 시비(VRT)', cat:'대행', type:'시비', status:'wait', field:'GJ-R5', veh:'VH-005', prog:0,  date:'07.24', area:1054, team:'오씨대행단', hours:0, fuel:0, vrt:true },
+  { id:'JOB-106', name:'부식리들 밀 수확', cat:'대행', type:'수확',  status:'issue', field:'GJ-R9', veh:'VH-004', prog:23, date:'07.21', area:1875, team:'소망대행단', hours:1.2, fuel:9, issue:'DTC P2263 — 요소수 품질 센서' },
+  { id:'JOB-107', name:'모산들 생육진단(드론)', cat:'일반', type:'생육진단', status:'done',  field:'GJ-R6', veh:null,   prog:100, date:'07.20', area:1192, team:null, hours:0.8, fuel:0 },
 ];
 const JOB_STATUS = { wait:['대기','gray'], run:['진행중','blue'], done:['완료','green'], issue:['이슈','red'] };
-const JOB_TYPE = { '대행':'chip-blue', 'A-Motion':'chip-purple', '일반':'chip-gray' };
 
-/* ---------- 농작업 대행 (현행 플랫폼 화면 기반) ---------- */
+/* ---------- 농작업 대행 (Figma '관리자 web 대행단 매칭 26.06.22' 기반, 농가→필지 흐름) ---------- */
 const CONTRACT = {
-  id:'CT-2026-031', title:'2026년 춘계 논/밭 로터리 작업 대행 모집', period:'2026.06.05 ~ 06.12',
-  region:'서산 읍장·운산', crops:'경운·이앙·방제·수확', mgr:'서산농협 010-1234-5678',
-  farms:24, priority:11, plots:16, totalPlots:16, doneRate:65, amount:38180000, expect:42180000,
+  id:'CT-2026-031', title:'2026년 봄 논 통합 대행 공고', period:'모집 2026.03.01 ~ 2026.05.31',
+  region:'관할 김제시 부량면·백산면', crops:'경운·이앙·방제·수확', mgr:'관리 김제시 부량면·백산면',
+  farms:24, priority:11, plots:16, totalPlots:78, doneRate:65, amount:8180000, expect:42180000, matched:'16/78필지',
 };
-const APPLICANTS = [
-  { name:'김철수', age:'65↑', gender:'남', ch:'온라인',  plot:'안들 1', addr:'부량면 신용리 12',   area:2400, work:'경운/쟁기', team:'미배정', price:7030000, st:'확정' },
-  { name:'이명희', age:'65↑', gender:'여', ch:'온라인',  plot:'윗배미', addr:'부량면 신용리 18',   area:1800, work:'방제',     team:'',       price:5180000, st:'확정' },
-  { name:'박민수', age:'',    gender:'남', ch:'오프라인',plot:'사과나무촌', addr:'부량면 옥동리 188', area:1200, work:'방제',  team:'',       price:3260000, st:'회정' },
-  { name:'최정자', age:'65↑', gender:'여', ch:'온라인',  plot:'파울 콘도', addr:'부량면 신용리 316-7', area:4500, work:'방제', team:'김제2회', price:14800000, st:'확정' },
-  { name:'정대호', age:'',    gender:'남', ch:'오프라인',plot:'방지논',  addr:'백산면 활용리 88',  area:1800, work:'정체',    team:'',       price:4890000, st:'확정' },
-  { name:'한미경', age:'65↑', gender:'여', ch:'온라인',  plot:'산꼭돈',  addr:'신용리 220',        area:800,  work:'정체',    team:'',       price:0,       st:'반려', memo:'중복 신청' },
-  { name:'서경수', age:'',    gender:'남', ch:'온라인',  plot:'끝간논',  addr:'부량면 신용리 220', area:1300, work:'방제',    team:'',       price:2520000, st:'확정' },
-  { name:'김창수', age:'65↑', gender:'남', ch:'온라인',  plot:'강가논',  addr:'부량면 신용리 350', area:1500, work:'정체',    team:'김제2회', price:4200000, st:'회정' },
+/* 농가별 신청 필지 (매칭 대상) */
+const AG_FARMERS = [
+  { id:'F1', name:'김철수', age:68, gender:'남', tags:['65↑'], uid:'kc_chulsoo', phone:'010-1234-5678', date:'03.18', on:7, off:3, limit:10000,
+    plots:[
+      { pid:'P-01', name:'큰논',    addr:'부량면 신용리 123-4', area:2400, work:'경운/정지', st:'대기', src:'온', team:null,     price:7030000 },
+      { pid:'P-02', name:'작은논',  addr:'부량면 신용리 125-1', area:1800, work:'방제',     st:'대기', src:'온', team:null,     price:5180000 },
+      { pid:'P-03', name:'본가논',  addr:'부량면 신용리 200-2', area:3200, work:'방제',     st:'확정', src:'오', team:'김제2팀', price:9750000 },
+      { pid:'P-04', name:'새터논',  addr:'부량면 신용리 318-7', area:4500, work:'방제',     st:'대기', src:'온', team:null,     price:14800000 },
+      { pid:'P-05', name:'산뒤논',  addr:'백산면 봉월리 88',    area:1300, work:'방제',     st:'반려', src:'오', team:null,     price:0, memo:'중복 신청' },
+      { pid:'P-06', name:'봉월 큰논', addr:'백산면 봉월리 102', area:2100, work:'방제',     st:'확정', src:'온', team:'김제2팀', price:6300000 },
+      { pid:'P-07', name:'봉월 윗논', addr:'백산면 봉월리 150', area:1200, work:'방제',     st:'대기', src:'온', team:null,     price:3520000 },
+      { pid:'P-08', name:'백산 본논', addr:'백산면 봉월리 180', area:1800, work:'수확',     st:'확정', src:'온', team:'김제2팀', price:5400000 },
+    ]},
+  { id:'F2', name:'이영희', age:72, gender:'여', tags:['65↑','여성'], uid:'lee_yh', phone:'010-9081-2231', date:'03.18', on:0, off:3, limit:8000,
+    plots:[
+      { pid:'P-11', name:'윗배미',  addr:'부량면 신용리 18',   area:1800, work:'방제', st:'대기', src:'오', team:null, price:5180000 },
+      { pid:'P-12', name:'아랫배미', addr:'부량면 신용리 18-3', area:1054, work:'시비', st:'확정', src:'오', team:'김제1팀', price:2840000 },
+      { pid:'P-13', name:'텃논',    addr:'부량면 신용리 19',   area:600,  work:'이앙', st:'대기', src:'오', team:null, price:1620000 },
+    ]},
+  { id:'F3', name:'박민수', age:58, gender:'남', tags:[], uid:'pms_58', phone:'010-3345-1120', date:'03.20', on:2, off:0, limit:6000,
+    plots:[
+      { pid:'P-21', name:'모산들',  addr:'부량면 옥동리 6',    area:1192, work:'경운/정지', st:'대기', src:'온', team:null, price:3260000 },
+      { pid:'P-22', name:'옥동 큰밭', addr:'부량면 옥동리 8',  area:900,  work:'파종',     st:'확정', src:'온', team:'김제1팀', price:2430000 },
+    ]},
+  { id:'F4', name:'최정자', age:65, gender:'여', tags:['65↑','여성'], uid:'cjj_65', phone:'010-7788-4102', date:'03.21', on:0, off:2, limit:5000,
+    plots:[
+      { pid:'P-31', name:'사과과수원', addr:'부량면 옥동리 21', area:870, work:'방제', st:'대기', src:'오', team:null, price:2350000 },
+      { pid:'P-32', name:'과수원 아랫밭', addr:'부량면 옥동리 22', area:450, work:'방제', st:'대기', src:'오', team:null, price:1210000 },
+    ]},
+  { id:'F5', name:'정대호', age:71, gender:'남', tags:['65↑','영세'], uid:'jdh_71', phone:'010-5512-0093', date:'03.22', on:2, off:0, limit:9000,
+    plots:[
+      { pid:'P-41', name:'큰들',   addr:'부량면 옥동리 33',   area:2210, work:'수확', st:'대기', src:'온', team:null, price:6630000 },
+      { pid:'P-42', name:'큰들 남측', addr:'부량면 옥동리 34', area:1100, work:'수확', st:'반려', src:'온', team:null, price:0, memo:'경계 미등록' },
+    ]},
 ];
 const AGENT_TEAMS = [
   { id:'T1', name:'코코대행단', lead:'담당 박OO · 010-1234-5678', plots:6, area:480, prog:33, state:'확인 대기', amount:540500,
@@ -338,6 +366,12 @@ const OCR_EXTRACT = {
     ['희망 작업','방제 (항공)','99%'],
     ['희망 시기','2026-06-08 ~ 06-12','94%'],
   ],
+};
+
+/* 5.3 임대 현황 — vehId → 임대 정보 */
+const RENTALS = {
+  'VH-001': { state:'임대중', to:'안들농장 (개인)', mgr:'김철수', phone:'010-2211-8890', period:'2026.07.10 ~ 08.10' },
+  'VH-004': { state:'예약',   to:'김제 농협',       mgr:'박조합', phone:'010-1234-5678', period:'2026.10월 수확기 (3건)' },
 };
 
 /* 5.1.2 차량등록 — 3rd party 브랜드/기기 카탈로그 */

@@ -300,7 +300,7 @@ const App = {
     setTimeout(()=>{
       body.insertAdjacentHTML('beforeend',`
         <div class="ins-card"><div class="ic-ico" style="background:var(--amber-soft);color:var(--amber)">${this.icon('rain',15)}</div>
-          <div><b>AI 재해경보 <span class="mono" style="font-size:9px;color:var(--ink-3)">3.2.3</span></b><small>내일 새벽 호우 예보 — 07.23 '윗배미 예초'를 오후로 미루는 것을 권장합니다.</small></div></div>
+          <div><b>AI 재해경보 <span class="mono" style="font-size:9px;color:var(--ink-3)">3.2.3</span></b><small>내일 새벽 호우 예보 — 07.23 '윗배미 잡초 방제'를 오후로 미루는 것을 권장합니다.</small></div></div>
         <div class="ins-card"><div class="ic-ico" style="background:var(--green-soft);color:var(--green)">${this.icon('won',15)}</div>
           <div><b>보조금 정책 추천 <span class="mono" style="font-size:9px;color:var(--ink-3)">3.2.2</span></b><small>'2026 농기계 임대료 지원사업'에 내 필지 조건이 부합합니다. 증빙 리포트 자동 생성 가능.</small></div></div>`);
       body.scrollTop=body.scrollHeight;
@@ -347,9 +347,9 @@ const App = {
         <b>1.</b> 안들 3 A-Motion 심경 로터리 — <span style="color:var(--purple);font-weight:700">진행중 42%</span><br>
         <b>2.</b> 큰들 방제(대행) 완료 확인 — 65%<br>
         <b>3.</b> <span style="color:var(--red);font-weight:700">⚠ 우선</span> DSC85 콤바인 DTC 조치 (서비스 예약 권장)<br>
-        <b>4.</b> 내일 호우 대비 — 윗배미 예초 일정 조정 검토
+        <b>4.</b> 내일 호우 대비 — 윗배미 방제 일정 조정 검토
         <span class="ai-link" onclick="App.toggleAI(false);App.go('work',{tab:'plan'})">${this.icon('work',13)} 작업 캘린더 열기 →</span>`);
-      this.aiChips(['DSC85 서비스 예약해줘','윗배미 예초 24일로 미뤄줘']);
+      this.aiChips(['DSC85 서비스 예약해줘','윗배미 방제 24일로 미뤄줘']);
     }
     else if(L.includes('매뉴얼')||L.includes('def')||L.includes('경고등')){
       this.aiBot(`<b>HX1400AI 유저매뉴얼 § 7.3</b>에서 찾았어요. <span class="mono" style="font-size:10px;color:var(--ink-3)">3.3.1 지식베이스</span><br><br>

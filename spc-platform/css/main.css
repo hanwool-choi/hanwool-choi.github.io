@@ -186,6 +186,8 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .chip-gray{background:var(--gray-chip);color:var(--ink-2)}
 .chip-purple{background:var(--purple-soft);color:var(--purple)}
 .chip-navy{background:var(--navy);color:#fff}
+.chip-teal{background:#E3F4F1;color:#1F9E8B}
+.chip-gold{background:#F7F0DC;color:#A5820A}
 .mono{font-family:var(--mono);font-size:.85em;letter-spacing:0}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 1.6s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(229,53,44,.45)}70%{box-shadow:0 0 0 7px rgba(229,53,44,0)}100%{box-shadow:0 0 0 0 rgba(229,53,44,0)}}
@@ -455,12 +457,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--su
 .map-pop .mp-actions{display:flex;gap:7px;padding:0 15px 13px}
 .map-pop .mp-actions .btn{flex:1;justify-content:center}
 
-/* A-Motion control strip */
+/* left stack: A-Motion 관제 + 기록 기간 패널 */
+.map-left-stack{position:absolute;top:64px;left:14px;z-index:11;display:flex;flex-direction:column;gap:10px}
 .amotion-strip{
-  position:absolute;top:64px;left:14px;z-index:11;background:rgba(255,255,255,.97);border-radius:14px;box-shadow:var(--shadow-lg);
+  background:rgba(255,255,255,.97);border-radius:14px;box-shadow:var(--shadow-lg);
   width:300px;overflow:hidden;animation:popIn .25s var(--ease);
 }
 .amotion-strip .as-head{background:linear-gradient(120deg,#6E56CF,#5A45B5);color:#fff;padding:11px 15px;display:flex;align-items:center;gap:9px;font-weight:800;font-size:13px}
+.amotion-strip .as-x{margin-left:auto;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:rgba(255,255,255,.8)}
+.amotion-strip .as-x:hover{background:rgba(255,255,255,.15);color:#fff}
 .amotion-strip .as-body{padding:12px 15px}
 .as-stat{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--ink-2)}
 .as-stat b{font-variant-numeric:tabular-nums;color:var(--ink)}
