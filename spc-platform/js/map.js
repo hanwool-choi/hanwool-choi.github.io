@@ -547,8 +547,9 @@ const MapView = (() => {
         const L=pathLength(pts);
         const p=pointAt(pts, state.movDist%L); x=p.x;y=p.y;ang=p.ang;
       } else {
-        const spots={ 'VH-004':[985,240],'VH-005':[1000,300],'VH-006':[1010,360] };
-        [x,y]=spots[v.id]||[1000,300+Math.random()*10];
+        /* 유휴/정비 차량 — 고정 주기장 위치 (프레임마다 흔들리지 않도록 상수) */
+        const spots={ 'VH-004':[985,235],'VH-005':[1010,300],'VH-006':[985,365],'VH-007':[1010,430] };
+        [x,y]=spots[v.id]||[1000,300];
       }
       el.setAttribute('transform',`translate(${x},${y})`);
       const lab=host.querySelector(`#covlab-${v.job}`);
@@ -596,24 +597,25 @@ const MapView = (() => {
     host.querySelector('#zout').onclick=()=>zoom(1.25);
     host.querySelector('#zfit').onclick=()=>{ state.view={x:0,y:0,w:1200,h:800}; state.selField=null; render(); };
     svg.addEventListener('wheel',e=>{ e.preventDefault(); zoom(e.deltaY>0?1.12:0.9); },{passive:false});
-    /* pan */
-    let drag=null;
-    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:state.view.x,vy:state.view.y}; svg.setPointerCapture(e.pointerId); });
-    svg.addEventListener('pointermove',e=>{ if(!drag)return; const sc=state.view.w/stage.clientWidth;
+    /* pan — 포인터 캡처를 쓰지 않고 임계값 기반으로만 팬(클릭 이벤트가 필지·마커로 정상 전달되도록) */
+    let drag=null, panning=false;
+    svg.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,vx:state.view.x,vy:state.view.y}; panning=false; });
+    svg.addEventListener('pointermove',e=>{ if(!drag)return;
+      if(!panning && Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5) return;   // 5px 이동 전까지는 클릭으로 간주
+      panning=true; const sc=state.view.w/stage.clientWidth;
       state.view.x=drag.vx-(e.clientX-drag.x)*sc; state.view.y=drag.vy-(e.clientY-drag.y)*sc;
       svg.setAttribute('viewBox',`${state.view.x} ${state.view.y} ${state.view.w} ${state.view.h}`); });
-    svg.addEventListener('pointerup',()=>drag=null);
+    const endPan=()=>{ drag=null; setTimeout(()=>panning=false,0); };
+    svg.addEventListener('pointerup',endPan);
+    svg.addEventListener('pointerleave',endPan);
     /* field click */
     host.querySelectorAll('.fld').forEach(p=>p.addEventListener('click',e=>{
-      if(dragMoved(e))return;
+      if(panning)return;
       const fid=p.dataset.field; state.selField=fid; showFieldPop(fid,e);
       host.querySelectorAll('.fld').forEach(q=>q.classList.toggle('sel',q.dataset.field===fid));
     }));
     /* vehicle click */
-    host.querySelectorAll('.veh-marker').forEach(m=>m.addEventListener('click',e=>{ e.stopPropagation(); showVehPop(m.dataset.veh,e); }));
-    let dstart=null;
-    svg.addEventListener('pointerdown',e=>dstart=[e.clientX,e.clientY]);
-    const dragMoved=e=>dstart&&Math.hypot(e.clientX-dstart[0],e.clientY-dstart[1])>6;
+    host.querySelectorAll('.veh-marker').forEach(m=>m.addEventListener('click',e=>{ e.stopPropagation(); if(panning)return; showVehPop(m.dataset.veh,e); }));
     /* layers */
     host.querySelectorAll('.layer-row').forEach(r=>r.addEventListener('click',e=>{
       if(e.target.closest('input'))return;
@@ -621,7 +623,9 @@ const MapView = (() => {
       if(id==='LY-03'&&state.layers[id]) state.amotionFocus=true;
       if(id==='LY-08'&&state.layers[id]){ focusField('GJ-R6', false); App.toast("수확량 맵 — 모산들(GJ-R6) '25 수확 데이터"); }
       if(LAYERS.find(l=>l.id===id).timeline && state.layers[id]){
-        const stop=TIME_STOPS.find(s=>s.layer===id&&!s.future); if(stop) state.stop=stop.id;
+        /* 수확량 맵은 타임라인 '수확' 시점에 싱크 (미래 스탑도 허용) */
+        const stop = id==='LY-08' ? TIME_STOPS.find(s=>s.layer===id) : TIME_STOPS.find(s=>s.layer===id&&!s.future);
+        if(stop) state.stop=stop.id;
         LAYERS.filter(l=>l.timeline&&l.id!==id).forEach(l=>state.layers[l.id]=false);
       }
       render();

@@ -125,7 +125,10 @@ const App = {
         <header class="topbar">
           <div class="crumb" id="crumb"></div>
           <button class="search-pill" onclick="App.toggleCmdk(true)">${this.icon('search',15)} 기능·필지·장비 검색 <kbd>Ctrl K</kbd></button>
-          <button class="top-icon" onclick="App.toast('알림 센터는 홈 대시보드에 통합되어 있습니다 (1.1.4)');App.go('dashboard')">${this.icon('bell',18)}<span class="dot"></span></button>
+          <div class="noti-wrap">
+            <button class="top-icon" id="notiBtn" onclick="App.toggleNoti()">${this.icon('bell',18)}<span class="dot"></span></button>
+            <div class="noti-pop" id="notiPop"></div>
+          </div>
           <div class="role-switch">
             <button class="role-btn" id="roleBtn" onclick="App.toggleRoleMenu()"></button>
             <div class="role-menu" id="roleMenu">
@@ -198,6 +201,34 @@ const App = {
   },
   toggleRoleMenu(force){
     document.getElementById('roleMenu').classList.toggle('open',force);
+  },
+  notiOpen:false,
+  toggleNoti(force){
+    this.notiOpen = force!==undefined? force : !this.notiOpen;
+    const pop=document.getElementById('notiPop');
+    if(this.notiOpen){
+      const unread=NOTIS.filter(n=>n.unread).length;
+      pop.innerHTML=`
+        <div class="noti-head">
+          <b>알림 센터</b> <span class="chip chip-red" style="font-size:9.5px">안읽음 ${unread}</span>
+          <button class="noti-readall" onclick="NOTIS.forEach(n=>n.unread=false);App.toggleNoti(true)">모두 읽음</button>
+        </div>
+        <div class="noti-list">
+          ${NOTIS.map((n,i)=>`
+            <div class="noti-item ${n.unread?'unread':''}" onclick="App.toggleNoti(false);App.go('${n.link}')">
+              <div class="alert-ico" style="background:var(--${n.color}-soft);color:var(--${n.color});width:34px;height:34px;flex-shrink:0">${this.icon(n.icon,15)}</div>
+              <div style="min-width:0;flex:1"><b>${n.title}</b><small>${n.sub}</small></div>
+              <span class="al-time">${n.time}</span>
+            </div>`).join('')}
+        </div>
+        <div class="noti-foot"><button onclick="App.toggleNoti(false);App.go('dashboard')">대시보드 알림 센터에서 전체 보기 (1.1.4) →</button></div>`;
+      pop.classList.add('open');
+      document.getElementById('notiBtn').querySelector('.dot')?.style.setProperty('display','none');
+      setTimeout(()=>{ this._notiOut=(ev)=>{ if(!ev.target.closest('.noti-wrap')){ this.toggleNoti(false); } }; document.addEventListener('click',this._notiOut); },0);
+    } else {
+      pop.classList.remove('open');
+      if(this._notiOut){ document.removeEventListener('click',this._notiOut); this._notiOut=null; }
+    }
   },
   setRole(id){
     this.role=ROLES.find(r=>r.id===id);
