@@ -426,7 +426,7 @@ Views.equip = {
     if(params&&params.tab) this.tab=params.tab;
     if(params&&params.veh){ this.tab='status'; setTimeout(()=>this.vehDrawer(params.veh),350); }
     const T=this.tab, isAdmin=App.role.id==='admin';
-    const tabs=[['status','차량 현황','5.2'],['mgmt','모델관리','5.1'],['rent','임대/배차','5.3'],['impl','작업기','5.4']];
+    const tabs=[['status','차량 현황','5.2'],['mgmt','모델관리','5.1'],['rent','임대/배차','5.3'],['impl','작업기','5.4'],['datahist','데이터 히스토리','6.3.2']];
     if(isAdmin) tabs.push(['term','단말기','5.5'],['fota','FOTA','5.6']);
     /* 탭별 주요 액션 버튼 */
     const primaryBtn = {
@@ -807,16 +807,65 @@ Views.equip = {
       </div>
     </div>`;
   },
+  /* ---- 6.3.2 작업 데이터 히스토리 (차량·작업기 운행 데이터 — 장비관리로 이관) ---- */
+  histVeh:'VH-001',
+  tab_datahist(){
+    const list=EQUIP.filter(v=>WORK_HISTORY[v.id]);
+    if(!list.some(v=>v.id===this.histVeh)) this.histVeh=(list[0]||{}).id;
+    const rows=WORK_HISTORY[this.histVeh]||[];
+    const totH=rows.reduce((s,r)=>s+r.hours,0), totA=rows.reduce((s,r)=>s+r.area,0), totF=rows.reduce((s,r)=>s+r.fuel,0);
+    return `<div class="perm-note">${App.icon('info')} <div>차량·작업기별 <b>운행/작업 데이터 히스토리</b>를 시계열로 조회합니다. 작업관리 과거 작업 등록(6.2.1) 시 이 데이터를 불러올 수 있습니다.</div></div>
+    <div class="filter-bar">
+      <div class="seg">
+        ${list.map(v=>`<button class="${this.histVeh===v.id?'active':''}" onclick="Views.equip.histVeh='${v.id}';App.rerender()">${v.model}</button>`).join('')}
+      </div>
+      <select class="f-select" id="dhImpl" onchange="Views.equip.filterDataHist()"><option value="">작업기 전체</option>${[...new Set(rows.map(r=>r.impl).filter(i=>i&&i!=='-'))].map(i=>`<option value="${i}">${i}</option>`).join('')}</select>
+      <div style="margin-left:auto">${mapBtn('주행경로 이력 맵',{layers:['LY-05','LY-04','LY-10']})}</div>
+    </div>
+    <div class="grid cols-4" style="margin-bottom:16px">
+      ${[['누적 가동시간',totH.toFixed(1),'h'],['누적 작업면적',fmt(totA),'평'],['누적 연료',fmt(totF),'L'],['기록 건수',rows.length,'건']]
+        .map(([l,v,u])=>`<div class="card kpi" style="padding:14px 18px"><div class="k-label">${l}</div><div class="k-value" style="font-size:23px">${v}<small>${u}</small></div></div>`).join('')}
+    </div>
+    <div class="grid" style="grid-template-columns:1.3fr .7fr">
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>작업일</th><th>작업</th><th>작업기</th><th class="t-num">가동(h)</th><th class="t-num">면적(평)</th><th class="t-num">연료(L)</th><th class="t-num">평균속도</th><th>출처</th></tr></thead>
+        <tbody id="dhBody">${rows.map(r=>`
+          <tr data-row data-impl="${r.impl}" onclick="App.toast('${r.date} 상세 운행 데이터 — 경로·속도 프로파일 (데모)')">
+            <td class="mono" style="font-size:12px">${r.date}</td><td class="t-strong">${r.job}</td><td style="font-size:12px">${r.impl}</td>
+            <td class="t-num">${r.hours}</td><td class="t-num">${fmt(r.area)}</td><td class="t-num">${r.fuel}</td><td class="t-num">${r.avgSpeed}km/h</td>
+            <td><span class="chip ${r.src==='A-Motion'?'chip-purple':r.src==='대행'?'chip-blue':r.src==='과거 등록'?'chip-amber':'chip-gray'}">${r.src}</span></td>
+          </tr>`).join('')}
+          <tr id="dhEmpty" style="display:none"><td colspan="8" style="text-align:center;color:var(--ink-3);padding:24px">선택한 작업기의 기록이 없습니다</td></tr></tbody>
+      </table></div>
+      <div class="card card-pad">
+        <h3 style="margin-bottom:10px">월별 가동시간</h3>
+        ${Charts.bars(['4월','5월','6월','7월'],[2.8,5.5,2.9,1.6],{h:130,color:'#2E6BE6'})}
+        <div class="deep-note" style="margin-top:10px">${App.icon('route')} 차량 운행·작업기 데이터는 TMU/ISOBUS에서 수집되어 차량별로 축적됩니다</div>
+      </div>
+    </div>`;
+  },
+  filterDataHist(){
+    const impl=document.getElementById('dhImpl').value;
+    let shown=0;
+    document.querySelectorAll('#dhBody tr[data-row]').forEach(tr=>{
+      const vis=!impl||tr.dataset.impl===impl; tr.style.display=vis?'':'none'; if(vis)shown++;
+    });
+    const empty=document.getElementById('dhEmpty'); if(empty) empty.style.display=shown?'none':'';
+  },
   bind(root){ Charts.arm(root); }
 };
 
 /* ============================================================ 6. 작업관리 */
 Views.work = {
-  tab:'status', view:'kanban', agencySub:'intake', selTeam:'T1', selPlot:0,
+  tab:'status', view:'calendar', agencySub:'intake', selTeam:'T1', selPlot:0,
   render(params){
-    if(params&&params.tab) this.tab=params.tab;
+    if(params&&params.tab){
+      /* 작업 캘린더는 작업현황 탭의 뷰로 통합됨 — 기존 딥링크(tab:'plan') 호환 */
+      if(params.tab==='plan'){ this.tab='status'; this.view='calendar'; }
+      else this.tab=params.tab;
+    }
     if(params&&params.sub) this.agencySub=params.sub;
-    if(params&&params.job){ this.tab='status'; setTimeout(()=>this.jobDrawer(params.job),280); }
+    if(params&&params.job){ this.tab='status'; this.view='kanban'; setTimeout(()=>this.jobDrawer(params.job),280); }
     const T=this.tab;
     return `<div class="page-enter">
       <div class="page-head">
@@ -826,7 +875,7 @@ Views.work = {
           <button class="btn btn-primary" onclick="Views.work.planModal()">${App.icon('plus')} 작업 계획 추가</button></div>
       </div>
       <div class="tabs">
-        ${[['status','작업현황','6.1'],['plan','작업 캘린더','6.2'],['history','작업이력','6.3'],['datahist','데이터 히스토리','6.3.2'],['agency','농작업 대행','6.5']]
+        ${[['status','작업현황','6.1'],['history','작업이력','6.3'],['agency','농작업 대행','6.5']]
           .map(([k,n,id])=>`<button class="tab ${T===k?'active':''}" onclick="App.go('work',{tab:'${k}'})">${n}<span class="tc mono">${id}</span></button>`).join('')}
       </div>
       ${this['tab_'+T]()}
@@ -835,16 +884,19 @@ Views.work = {
 
   /* ---- 6.1 작업현황 (칸반/목록) ---- */
   tab_status(){
+    const v=this.view;
     return `<div class="filter-bar">
       <div class="seg">
-        <button class="${this.view==='kanban'?'active':''}" onclick="Views.work.view='kanban';App.rerender()">칸반</button>
-        <button class="${this.view==='list'?'active':''}" onclick="Views.work.view='list';App.rerender()">목록</button>
+        <button class="${v==='calendar'?'active':''}" onclick="Views.work.view='calendar';App.rerender()">${App.icon('work',13)} 캘린더</button>
+        <button class="${v==='kanban'?'active':''}" onclick="Views.work.view='kanban';App.rerender()">칸반</button>
+        <button class="${v==='list'?'active':''}" onclick="Views.work.view='list';App.rerender()">목록</button>
       </div>
-      <select class="f-select"><option>대분류 전체</option><option>일반</option><option>대행</option></select>
-      <select class="f-select"><option>작업유형 전체</option>${WORKTYPES.map(w=>`<option>${w}</option>`).join('')}</select>
+      ${v==='calendar'?'':`<select class="f-select"><option>대분류 전체</option><option>일반</option><option>대행</option></select>
+      <select class="f-select"><option>작업유형 전체</option>${WORKTYPES.map(w=>`<option>${w}</option>`).join('')}</select>`}
       <div style="margin-left:auto">${mapBtn('작업 진행 레이어 맵에서 보기',{layers:['LY-02','LY-01','LY-10']})}</div>
     </div>
-    ${this.view==='kanban'? `<div class="kanban">
+    ${v==='calendar'? this.tab_plan()
+    : v==='kanban'? `<div class="kanban">
       ${Object.entries(JOB_STATUS).map(([k,[t,c]])=>{
         const items=JOBS.filter(j=> k==='issue'? j.status==='issue' : j.status===k);
         return `<div class="kan-col">
@@ -932,22 +984,14 @@ Views.work = {
 
   /* ---- 6.2.3 AI 영농일지 ---- */
   diaryDone:new Set(),
-  diaryModal(jid){
-    const j=JOBS.find(x=>x.id===jid), f=FIELDS.find(x=>x.id===j.field);
-    const isView=this.diaryDone.has(jid);
-    const d=FARM_DIARY[jid] || {
-      title:`${j.name} 영농일지`, date:`2026-${j.date.replace('.','-')}`, field:j.field, area:j.area,
-      weather:'맑음 · 27℃ · 습도 64%', veh:(EQUIP.find(e=>e.id===j.veh)||{}).nick||'-', impl:'-', team:j.team||'자가작업',
-      body:`${j.date}, ${f?f.name:''} 필지(${fmt(j.area)}평)에서 ${j.name} 작업을 수행했습니다. 총 ${j.hours}시간이 소요되었으며 연료 ${j.fuel}L를 사용했습니다. 매칭된 작업계획과 차량·작업기 데이터를 기반으로 자동 작성된 일지입니다.`,
-      kpi:[['작업면적',fmt(j.area)+'평'],['작업시간',j.hours+'시간'],['연료',j.fuel+'L'],['작업유형',j.type]],
-      photos:['작업 전 (BEFORE)','작업 후 (AFTER)'],
-    };
-    const revealHTML=`
-        <div style="padding:22px 26px;max-height:64vh;overflow-y:auto">
+  /* 영농일지 본문 공통 렌더 (작업현황·정산 탭에서 동일 레이아웃 재사용) */
+  diaryContent(d, isView, fname){
+    return `<div style="padding:22px 26px;max-height:64vh;overflow-y:auto">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             ${isView?`<span class="chip chip-green">${App.icon('check',12)} 작성 완료</span>`:`<span class="chip chip-red">${App.icon('bot',12)} AI 자동 작성</span>`}
             <span class="chip chip-gray mono">${d.date}</span>
-            <span class="chip chip-gray">${f?f.name:d.field}</span>
+            <span class="chip chip-gray">${fname}</span>
+            ${d.team&&d.team!=='자가작업'?`<span class="chip chip-blue">${d.team}</span>`:''}
           </div>
           <h2 style="font-size:18px;font-weight:800;margin:8px 0 14px">${d.title}</h2>
           <div class="grid cols-4" style="gap:8px;margin-bottom:16px">
@@ -962,8 +1006,43 @@ Views.work = {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
             ${d.photos.map(p=>`<div class="photo-ph filled" style="aspect-ratio:16/7">${App.icon('photo',18)} ${p}</div>`).join('')}
           </div>
+          ${d.mats&&d.mats.length?`<h3 style="font-size:12.5px;margin:16px 0 6px">농약 & 비료</h3>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">${d.mats.map(m=>`<span class="chip chip-gray" style="font-size:10.5px">${m}</span>`).join('')}</div>`:''}
           ${isView?'':`<div class="perm-note" style="margin-top:14px">${App.icon('info')} <div>AI 초안입니다 — 내용을 검토·수정 후 확정하세요. 확정 시 <b>작업이력·보조금 증빙 리포트(10.2)</b>에 자동 연계됩니다.</div></div>`}
+        </div>`;
+  },
+  /* 정산 탭 — 대행단이 작성·저장한 영농일지 조회 (작업현황 diaryModal과 동일 레이아웃) */
+  settleDiaryModal(pi){
+    const p=SETTLE_PLOTS[pi], team=AGENT_TEAMS.find(t=>t.id===this.selTeam)||AGENT_TEAMS[0];
+    const d={
+      title:`${p.name} ${p.work} 영농일지`, date:'2026-06-10', field:p.name, area:p.area,
+      weather:'맑음 · 26℃ · 습도 58% · 남서풍 1.8m/s', veh:'GX7510ATC (모델봉)', impl:'붐스프레이어', team:team.name,
+      body:`2026년 6월 10일 08:00~14:30, ${p.name} 필지(${fmt(p.area)}평)에서 ${team.name}이(가) ${p.work} 작업을 수행했습니다. 신청 면적 대비 작업 구간을 확인하고 BEFORE/AFTER 사진을 촬영해 기록했습니다.${p.cut?` 작업 중 ${p.cutWhy}` : ' 작업은 이상 없이 완료되었습니다.'} 최종 정산액은 ${fmtW(p.amount)}입니다.`,
+      kpi:[['작업면적',fmt(p.area)+'평'],['작업시간','6시간 30분'],['단가','평당 ₩270'],['정산액',fmtW(p.amount)]],
+      photos:['작업 전 (BEFORE)','작업 후 (AFTER)'],
+      mats:['가스케미칼 살균살충제 액제 / 1,000mL','가스케미칼 발아억제 액제 / 1,000mL'],
+    };
+    App.modal(`영농일지 조회 — ${team.name}`, `
+      <div style="padding:0">
+        ${this.diaryContent(d, true, p.name)}
+        <div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="App.toast('PDF로 내보냈습니다 (데모)')">${App.icon('download')} PDF</button>
+          <button class="btn btn-navy" onclick="App.closeModal()">닫기</button>
         </div>
+      </div>`);
+  },
+  diaryModal(jid){
+    const j=JOBS.find(x=>x.id===jid), f=FIELDS.find(x=>x.id===j.field);
+    const isView=this.diaryDone.has(jid);
+    const d=FARM_DIARY[jid] || {
+      title:`${j.name} 영농일지`, date:`2026-${j.date.replace('.','-')}`, field:j.field, area:j.area,
+      weather:'맑음 · 27℃ · 습도 64%', veh:(EQUIP.find(e=>e.id===j.veh)||{}).nick||'-', impl:'-', team:j.team||'자가작업',
+      body:`${j.date}, ${f?f.name:''} 필지(${fmt(j.area)}평)에서 ${j.name} 작업을 수행했습니다. 총 ${j.hours}시간이 소요되었으며 연료 ${j.fuel}L를 사용했습니다. 매칭된 작업계획과 차량·작업기 데이터를 기반으로 자동 작성된 일지입니다.`,
+      kpi:[['작업면적',fmt(j.area)+'평'],['작업시간',j.hours+'시간'],['연료',j.fuel+'L'],['작업유형',j.type]],
+      photos:['작업 전 (BEFORE)','작업 후 (AFTER)'],
+    };
+    const revealHTML=`
+        ${this.diaryContent(d, isView, f?f.name:d.field)}
         <div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">
           ${isView?`
             <button class="btn btn-ghost" onclick="App.toast('PDF로 내보냈습니다 (데모)')">${App.icon('download')} PDF</button>
@@ -1108,51 +1187,6 @@ Views.work = {
           .map(([k,v])=>`<span class="chip chip-blue">${k} ${v}</span>`).join('')}</div>
         <small style="font-size:11px;color:var(--green);font-weight:700;display:block;margin-top:6px">✓ TMU 운행 데이터를 불러와 자동 입력했습니다</small>`;
     },900);
-  },
-
-  /* ---- 6.3.2 작업 데이터 히스토리 ---- */
-  histVeh:'VH-001',
-  tab_datahist(){
-    const list=EQUIP.filter(v=>WORK_HISTORY[v.id]);
-    const rows=WORK_HISTORY[this.histVeh]||[];
-    const totH=rows.reduce((s,r)=>s+r.hours,0), totA=rows.reduce((s,r)=>s+r.area,0), totF=rows.reduce((s,r)=>s+r.fuel,0);
-    return `<div class="perm-note">${App.icon('info')} <div>차량·작업기별 <b>운행/작업 데이터 히스토리</b>를 시계열로 조회합니다. 과거 작업 등록(6.2.1) 시 이 데이터를 불러올 수 있습니다.</div></div>
-    <div class="filter-bar">
-      <div class="seg">
-        ${list.map(v=>`<button class="${this.histVeh===v.id?'active':''}" onclick="Views.work.histVeh='${v.id}';App.rerender()">${v.model}</button>`).join('')}
-      </div>
-      <select class="f-select" id="dhImpl" onchange="Views.work.filterDataHist()"><option value="">작업기 전체</option>${[...new Set(rows.map(r=>r.impl).filter(i=>i&&i!=='-'))].map(i=>`<option value="${i}">${i}</option>`).join('')}</select>
-      <div style="margin-left:auto">${mapBtn('주행경로 이력 맵',{layers:['LY-05','LY-04','LY-10']})}</div>
-    </div>
-    <div class="grid cols-4" style="margin-bottom:16px">
-      ${[['누적 가동시간',totH.toFixed(1),'h'],['누적 작업면적',fmt(totA),'평'],['누적 연료',fmt(totF),'L'],['기록 건수',rows.length,'건']]
-        .map(([l,v,u])=>`<div class="card kpi" style="padding:14px 18px"><div class="k-label">${l}</div><div class="k-value" style="font-size:23px">${v}<small>${u}</small></div></div>`).join('')}
-    </div>
-    <div class="grid" style="grid-template-columns:1.3fr .7fr">
-      <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>작업일</th><th>작업</th><th>작업기</th><th class="t-num">가동(h)</th><th class="t-num">면적(평)</th><th class="t-num">연료(L)</th><th class="t-num">평균속도</th><th>출처</th></tr></thead>
-        <tbody id="dhBody">${rows.map(r=>`
-          <tr data-row data-impl="${r.impl}" onclick="App.toast('${r.date} 상세 운행 데이터 — 경로·속도 프로파일 (데모)')">
-            <td class="mono" style="font-size:12px">${r.date}</td><td class="t-strong">${r.job}</td><td style="font-size:12px">${r.impl}</td>
-            <td class="t-num">${r.hours}</td><td class="t-num">${fmt(r.area)}</td><td class="t-num">${r.fuel}</td><td class="t-num">${r.avgSpeed}km/h</td>
-            <td><span class="chip ${r.src==='A-Motion'?'chip-purple':r.src==='대행'?'chip-blue':r.src==='과거 등록'?'chip-amber':'chip-gray'}">${r.src}</span></td>
-          </tr>`).join('')}
-          <tr id="dhEmpty" style="display:none"><td colspan="8" style="text-align:center;color:var(--ink-3);padding:24px">선택한 작업기의 기록이 없습니다</td></tr></tbody>
-      </table></div>
-      <div class="card card-pad">
-        <h3 style="margin-bottom:10px">월별 가동시간</h3>
-        ${Charts.bars(['4월','5월','6월','7월'],[2.8,5.5,2.9,1.6],{h:130,color:'#2E6BE6'})}
-        <div class="deep-note" style="margin-top:10px">${App.icon('route')} 차량 운행·작업기 데이터는 TMU/ISOBUS에서 수집되어 차량별로 축적됩니다</div>
-      </div>
-    </div>`;
-  },
-  filterDataHist(){
-    const impl=document.getElementById('dhImpl').value;
-    let shown=0;
-    document.querySelectorAll('#dhBody tr[data-row]').forEach(tr=>{
-      const vis=!impl||tr.dataset.impl===impl; tr.style.display=vis?'':'none'; if(vis)shown++;
-    });
-    const empty=document.getElementById('dhEmpty'); if(empty) empty.style.display=shown?'none':'';
   },
 
   /* ---- 6.2 캘린더 (JOBS 연동 — 계획 추가 시 자동 표출, 클릭 시 작업 상세) ---- */
@@ -1300,7 +1334,8 @@ Views.work = {
               <span style="font-size:10.5px;color:var(--ink-3);width:26px;font-weight:700">${k}</span>
               ${ops.map((o,i)=>`<button class="preset-pill ${i===0?'active':''}" style="padding:2px 8px;font-size:10px" onclick="App.toast('${k} 필터: ${o} (데모)')">${o}</button>`).join('')}
             </div>`).join('')}
-          <button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:7px;border:1.5px solid var(--red);color:var(--red);border-radius:9px" onclick="Views.work.ocrModal()">+ 오프라인 일괄 업로드</button>
+          <button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:7px;border:1.5px solid var(--red);color:var(--red);border-radius:9px" onclick="Views.work.ocrModal()">${App.icon('photo',13)} AI 사진 업로드</button>
+          <button class="btn btn-sm" style="width:100%;justify-content:center;margin-top:7px;border:1.5px solid var(--green);color:var(--green);border-radius:9px" onclick="Views.work.excelModal()">${App.icon('doc',13)} 엑셀 일괄 업로드</button>
         </div>
         <div class="card" style="overflow:hidden">
           <div style="padding:12px 15px;border-bottom:1px solid var(--line)">
@@ -1418,12 +1453,55 @@ Views.work = {
     </div>`;
   },
   togglePlot(pid){ const s=this.agSel; s.has(pid)?s.delete(pid):s.add(pid); App.rerender(); },
-  agAccept(){
+  /* 선택 필지 수락 → 매칭할 대행단 배정 팝업 (일괄 배정) */
+  assignTeamModal(){
+    const F=AG_FARMERS.find(f=>f.id===this.agFarmer);
+    const plots=F.plots.filter(p=>this.agSel.has(p.pid));
+    if(!plots.length){ App.toast('선택된 필지가 없습니다'); return; }
+    const area=plots.reduce((s,p)=>s+p.area,0), amt=plots.reduce((s,p)=>s+p.price,0);
+    /* AI 추천: 진행률(부하)이 가장 낮은 대행단 */
+    const rec=[...AGENT_TEAMS].sort((a,b)=>a.prog-b.prog)[0];
+    App.modal(`대행단 배정`, `
+      <div style="padding:22px 26px">
+        <div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:12px;padding:12px 15px;margin-bottom:16px">
+          <span class="ab-chip" style="background:var(--red);color:#fff;border-radius:6px;padding:3px 9px;font-size:11.5px;font-weight:800">선택 ${plots.length}</span>
+          <div style="font-size:12.5px;color:var(--ink-2)"><b>${F.name} 농가</b> · 필지 ${plots.length}개 · 합계 ${fmt(area)}평 · 예상 정산 <b style="color:var(--red)">${fmtW(amt)}</b></div>
+        </div>
+        <div style="font-size:12px;font-weight:800;color:var(--ink-3);margin-bottom:8px">매칭할 대행단 선택 <span style="font-weight:600;color:var(--ink-3)">— 선택 필지 ${plots.length}건을 일괄 배정합니다</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${AGENT_TEAMS.map(t=>{
+            const isRec=t.id===rec.id;
+            return `<label class="radio-tile" style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:12px 14px">
+              <input type="radio" name="asgTeam" value="${t.id}" ${isRec?'checked':''} style="accent-color:var(--red);width:16px;height:16px;flex-shrink:0">
+              <div class="lr-swatch" style="background:var(--navy);width:32px;height:32px;border-radius:9px;flex-shrink:0">${App.icon('tractor',16)}</div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px"><b style="font-size:13px">${t.name}</b>
+                  ${isRec?`<span class="chip chip-red" style="font-size:9px">${App.icon('bot',10)} AI 추천</span>`:''}</div>
+                <small style="font-size:10.5px;color:var(--ink-3)">${t.lead}</small>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:10.5px;color:var(--ink-3);font-weight:700">현재 진행률</div>
+                <b style="font-size:14px;color:${t.prog===100?'var(--green)':t.prog<50?'var(--blue)':'var(--amber)'}">${t.prog}%</b>
+                <div style="font-size:10px;color:var(--ink-3)">필지 ${t.plots} · ${fmt(t.area)}평</div>
+              </div>
+            </label>`;}).join('')}
+        </div>
+        <div class="perm-note" style="margin-top:14px;font-size:11.5px">${App.icon('bot')} <div><b>AI 배차 최적화</b> — 부하가 가장 낮은 <b>${rec.name}</b>을(를) 추천합니다. 배정 시 이동 동선 최적화(-18%)가 적용됩니다.</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
+          <button class="btn btn-primary" onclick="Views.work.assignConfirm()">${App.icon('check')} 배정 및 수락 확정</button>
+        </div>
+      </div>`);
+  },
+  assignConfirm(){
+    const sel=document.querySelector('input[name=asgTeam]:checked');
+    const team=AGENT_TEAMS.find(t=>t.id===(sel&&sel.value))||AGENT_TEAMS[0];
     const F=AG_FARMERS.find(f=>f.id===this.agFarmer);
     let n=0;
-    F.plots.forEach(p=>{ if(this.agSel.has(p.pid)){ p.st='확정'; p.team='코코대행단'; n++; } });
+    F.plots.forEach(p=>{ if(this.agSel.has(p.pid)){ p.st='확정'; p.team=team.name; n++; } });
     this.agSel.clear();
-    App.toast(`${n}개 필지 수락 및 매칭 완료 — AI 배차 최적화 적용 (이동거리 -18%)`);
+    App.closeModal();
+    App.toast(`${n}개 필지를 '${team.name}'에 배정·수락했습니다 — AI 배차 최적화 적용 (이동거리 -18%)`);
     App.rerender();
   },
   agReject(){
@@ -1449,7 +1527,7 @@ Views.work = {
           <div class="spacer"></div>
           <button class="btn btn-ghost" style="border-color:#46505C;color:#C9D1DB" onclick="Views.work.agSel.clear();App.rerender()">선택 해제</button>
           <button class="btn btn-navy" style="background:#39424E" onclick="Views.work.agReject()">⊘ 선택 필지 반려</button>
-          <button class="btn btn-primary" onclick="Views.work.agAccept()">${App.icon('check')} 선택 필지 수락 및 매칭</button>
+          <button class="btn btn-primary" onclick="Views.work.assignTeamModal()">${App.icon('check')} 선택 필지 수락 및 매칭</button>
         </div>
         <div style="display:flex;gap:14px;width:100%;font-size:11px;color:#8D97A5;border-top:1px solid #39424E;padding-top:7px;align-items:center">
           <span style="font-weight:700">선택 필지 합계</span>
@@ -1507,36 +1585,105 @@ Views.work = {
       const reg=document.getElementById('ocrReg'); if(reg){ reg.disabled=false; reg.style.opacity='1'; }
     }, 1600);
   },
+  /* ---- 6.5.1 엑셀 일괄 업로드 (신청서 엑셀 → 접수 목록 자동 등록) ---- */
+  excelRows:[
+    ['정순금','옥동리 145','방제(항공)','1,100','2026-06-08'],
+    ['한복동','신용리 302','경운/정지','2,400','2026-06-09'],
+    ['오말순','봉월리 77','수확','1,850','2026-06-11'],
+    ['김판석','옥동리 51','방제','980','2026-06-12'],
+  ],
+  excelModal(){
+    App.modal(`엑셀 일괄 업로드`, `
+      <div style="padding:22px 26px">
+        <p style="font-size:12.5px;color:var(--ink-2);margin-bottom:14px">농작업대행 신청 명단 엑셀(.xlsx)을 업로드하면 접수 목록으로 일괄 등록됩니다. 표준 양식의 열(성명·주소·작업·면적·희망시기)을 자동 매핑합니다.</p>
+        <div id="xlDrop" style="border:1.5px dashed var(--line-2);border-radius:12px;padding:26px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface-2)"
+          onclick="Views.work.excelParse()" onmouseover="this.style.borderColor='var(--green)';this.style.background='var(--green-soft)'" onmouseout="this.style.borderColor='var(--line-2)';this.style.background='var(--surface-2)'">
+          <div class="lr-swatch" style="background:var(--green);width:40px;height:40px;border-radius:12px;margin:0 auto 10px">${App.icon('upload',20)}</div>
+          <b style="font-size:13.5px;display:block">엑셀 파일을 끌어놓거나 클릭하여 선택</b>
+          <small style="font-size:11px;color:var(--ink-3)">.xlsx · 표준 신청 명단 양식 <a style="color:var(--green);font-weight:700">양식 다운로드</a></small>
+        </div>
+        <div id="xlResult" style="margin-top:14px"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="App.closeModal()">취소</button>
+          <button class="btn btn-primary" id="xlReg" disabled style="opacity:.5" onclick="Views.work.excelRegister()">${App.icon('check')} 접수 일괄 등록</button>
+        </div>
+      </div>`);
+  },
+  excelParse(){
+    const box=document.getElementById('xlResult'); if(!box) return;
+    box.innerHTML=`<div style="text-align:center;padding:16px;color:var(--ink-3);font-size:12.5px"><span class="ai-typing" style="display:inline-flex;background:#fff"><i></i><i></i><i></i></span><div style="margin-top:6px">samgok_신청명단.xlsx 파싱 중...</div></div>`;
+    setTimeout(()=>{
+      if(!document.getElementById('xlResult')) return;
+      const rows=this.excelRows;
+      box.innerHTML=`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span class="chip chip-green">${App.icon('check',12)} ${rows.length}건 인식</span>
+          <small style="font-size:11.5px;color:var(--ink-3)">samgok_신청명단.xlsx · 열 매핑 완료</small>
+        </div>
+        <div class="tbl-wrap" style="max-height:220px;overflow-y:auto"><table class="tbl">
+          <thead><tr><th>성명</th><th>주소</th><th>작업</th><th class="t-num">면적(평)</th><th>희망시기</th></tr></thead>
+          <tbody>${rows.map(r=>`<tr><td class="t-strong">${r[0]}</td><td style="font-size:12px">${r[1]}</td>
+            <td><span class="chip ${WT_CHIP[r[2].split('(')[0]]||'chip-gray'}" style="font-size:10px">${r[2]}</span></td>
+            <td class="t-num">${r[3]}</td><td class="mono" style="font-size:11.5px">${r[4]}</td></tr>`).join('')}</tbody>
+        </table></div>`;
+      const reg=document.getElementById('xlReg'); if(reg){ reg.disabled=false; reg.style.opacity='1'; }
+    },1100);
+  },
+  excelRegister(){
+    App.closeModal();
+    App.toast(`${this.excelRows.length}건이 접수 목록에 일괄 등록되었습니다 — AI 배차 매칭 대기`);
+  },
   agProgress(){
+    const doneFields=AGENT_TEAMS.flatMap(t=>t.fields).filter(f=>f.st==='완료').length;
+    const totFields=AGENT_TEAMS.flatMap(t=>t.fields).length;
     return `<div class="grid" style="grid-template-columns:.9fr 1.1fr">
       <div>
-        <div class="card card-pad" style="margin-bottom:14px">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div><b style="font-size:15px">${CONTRACT.title}</b><br>
-            <small style="color:var(--ink-3);font-size:11.5px">필지 16건 · 총 1,231평 · 대행단 3팀</small></div>
-            <div style="margin-left:auto;text-align:right"><small style="font-size:10.5px;color:var(--ink-3);font-weight:700">전체 진행률</small>
-              <div style="font-size:23px;font-weight:800;color:var(--blue)">65%</div></div>
+        <!-- 공고 배너 (작업과 시각적으로 분리) -->
+        <div style="background:linear-gradient(120deg,var(--navy),#39424E);border-radius:16px;padding:16px 18px;margin-bottom:16px;color:#fff;box-shadow:var(--shadow-md)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span class="chip" style="background:rgba(255,255,255,.16);color:#fff;font-size:10px">${App.icon('doc',11)} 공고</span>
+            <span class="chip chip-green" style="font-size:9.5px"><span class="cd" style="background:currentColor"></span>진행중</span>
+            <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:#A6B1BF">${CONTRACT.id}</span>
           </div>
-          <div class="prog" style="height:7px;margin-top:10px"><i style="width:65%"></i></div>
+          <b style="font-size:16px;letter-spacing:-.2px">${CONTRACT.title}</b>
+          <div style="display:flex;gap:14px;font-size:11.5px;color:#C9D1DB;margin-top:6px;flex-wrap:wrap">
+            <span>${App.icon('map',11)} ${CONTRACT.region.replace('관할 ','')}</span>
+            <span>${CONTRACT.crops}</span>
+            <span>필지 16건 · 총 1,231평 · 대행단 3팀</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+            <div style="flex:1"><div style="display:flex;justify-content:space-between;font-size:10.5px;color:#A6B1BF;font-weight:700;margin-bottom:4px"><span>전체 진행률</span><span>${doneFields}/${totFields} 필지 완료</span></div>
+              <div style="height:8px;background:rgba(255,255,255,.15);border-radius:5px;overflow:hidden"><div style="width:65%;height:100%;background:linear-gradient(90deg,#5BE49B,#0E9F5A);border-radius:5px"></div></div></div>
+            <div style="font-size:24px;font-weight:800;color:#5BE49B">65%</div>
+          </div>
         </div>
-        ${AGENT_TEAMS.map(t=>`
-          <div class="card card-pad" style="margin-bottom:10px;cursor:pointer" onclick="App.go('work',{tab:'agency',sub:'settle'})">
+        <!-- 작업 진행 섹션 (공고 하위) -->
+        <div style="display:flex;align-items:center;gap:8px;margin:0 2px 10px">
+          <div style="width:3px;height:15px;background:var(--red);border-radius:2px"></div>
+          <b style="font-size:13px">작업 진행 · 대행단별</b>
+          <span class="chip chip-gray" style="font-size:10px">${AGENT_TEAMS.length}팀</span>
+          <small style="margin-left:auto;font-size:10.5px;color:var(--ink-3)">카드 클릭 → 정산 상세</small>
+        </div>
+        ${AGENT_TEAMS.map(t=>{
+          const accent=t.prog===100?'var(--green)':t.prog>=50?'var(--amber)':'var(--blue)';
+          return `
+          <div class="card" style="margin-bottom:10px;cursor:pointer;border-left:3px solid ${accent};overflow:hidden" onclick="Views.work.selTeam='${t.id}';App.go('work',{tab:'agency',sub:'settle'})">
+            <div style="padding:13px 15px">
             <div style="display:flex;align-items:center;gap:9px">
-              <span class="chip chip-gray">${{'확인 대기':'수확','확인 완료':'수확','보완 요청':'방제'}[t.state]||'작업'}</span>
-              <b style="font-size:13.5px">${t.name}</b>
-              <small style="color:var(--ink-3);font-size:11px">${t.lead}</small>
-              <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-                <small style="font-size:10.5px;color:var(--ink-3);font-weight:700">진행률</small><b style="color:${t.prog===100?'var(--green)':'var(--blue)'}">${t.prog}%</b></div>
+              <div class="lr-swatch" style="background:${accent};width:28px;height:28px;border-radius:8px;flex-shrink:0">${App.icon('tractor',15)}</div>
+              <div style="min-width:0"><b style="font-size:13.5px">${t.name}</b>
+                <small style="display:block;color:var(--ink-3);font-size:10.5px">${t.lead}</small></div>
+              <div style="margin-left:auto;text-align:right">
+                <b style="font-size:16px;color:${accent}">${t.prog}%</b>
+                <small style="display:block;font-size:10px;color:var(--ink-3)">필지 ${t.plots}건 · ${fmt(t.area)}평</small></div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
-              <div class="prog ${t.prog===100?'green':''}" style="flex:1"><i style="width:${t.prog}%"></i></div>
-              <small style="font-size:11px;color:var(--ink-3)">필지 ${t.plots}건 · ${fmt(t.area)}평</small>
-            </div>
+            <div class="prog ${t.prog===100?'green':t.prog>=50?'amber':''}" style="margin-top:9px;height:6px"><i style="width:${t.prog}%"></i></div>
             <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
               ${t.fields.map(f=>{const c=f.st==='완료'?'chip-blue':f.st==='진행중'?'chip-green':'chip-gray';
-                return `<span class="chip ${c}">${f.n} ${f.a}평 · ${f.st}</span>`;}).join('')}
+                return `<span class="chip ${c}" style="font-size:10px">${f.n} ${f.a}평 · ${f.st}</span>`;}).join('')}
             </div>
-          </div>`).join('')}
+            </div>
+          </div>`;}).join('')}
       </div>
       <div class="card" style="overflow:hidden">
         <div class="card-head"><h3>필지 지도</h3>
@@ -1610,7 +1757,10 @@ Views.work = {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
             <span class="chip ${plot.cut?'chip-red':'chip-green'}">${plot.tag}</span><b style="font-size:14px">${plot.name}</b>
             <b style="margin-left:auto;color:var(--red);font-size:15px">${fmtW(plot.amount)}</b></div>
-          <h3 style="font-size:12.5px;margin-bottom:8px">영농일지 <small style="color:var(--ink-3);font-weight:600">작업 26/06/10 08:00 ~ 14:30</small></h3>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <h3 style="font-size:12.5px">영농일지 <small style="color:var(--ink-3);font-weight:600">작업 26/06/10 08:00 ~ 14:30</small></h3>
+            <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="Views.work.settleDiaryModal(${this.selPlot})">${App.icon('doc',12)} 전체 보기</button>
+          </div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">
             ${['BEFORE 1','BEFORE 2','BEFORE 3'].map(t=>`<div class="photo-ph filled">${App.icon('photo')} ${t}</div>`).join('')}
           </div>
