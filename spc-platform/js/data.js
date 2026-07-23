@@ -3,6 +3,11 @@
    Source of truth: 'SPC 오퍼레이션 플랫폼 기능도출_v2.2' IA 시트
    ============================================================ */
 
+/* 데모 기준일(단일 원천) — 시연 날짜 변경 시 여기만 수정하면 대시보드·캘린더·과거판정이 함께 갱신됨.
+   내러티브(기상 '내일'·재해 eta·JOB 날짜)가 07월 하순에 맞춰져 있어 기본값은 2026-07-22로 고정. */
+const DEMO_TODAY = { iso:'2026-07-22', md:'07.22', dow:'수', dom:22, ym:'2026년 7월' };
+DEMO_TODAY.label = `${DEMO_TODAY.iso.replace(/-/g,'.')} (${DEMO_TODAY.dow})`;
+
 const ROLES = [
   { id:'admin',  name:'김운영',  title:'SPC Admin',        org:'SPC 플랫폼운영팀', color:'#E5352C', initial:'S' },
   { id:'corp',   name:'박조합',  title:'법인 관리자',       org:'김제 농협 (B2B)',   color:'#2E6BE6', initial:'농' },

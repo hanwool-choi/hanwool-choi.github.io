@@ -549,7 +549,12 @@ const MapView = (() => {
       } else {
         /* 유휴/정비 차량 — 고정 주기장 위치 (프레임마다 흔들리지 않도록 상수) */
         const spots={ 'VH-004':[985,235],'VH-005':[1010,300],'VH-006':[985,365],'VH-007':[1010,430] };
-        [x,y]=spots[v.id]||[1000,300];
+        if(spots[v.id]){ [x,y]=spots[v.id]; }
+        else { /* 신규 등록 차량 등 미지정 유휴 차량 — 주기장 하단에 순서대로 배치(겹침 방지) */
+          const extra=EQUIP.filter(e=>e.status!=='work'&&e.status!=='move'&&!spots[e.id]);
+          const i=Math.max(0,extra.findIndex(e=>e.id===v.id));
+          [x,y]=[i%2?1010:985, 495+Math.floor(i/2)*66];
+        }
       }
       el.setAttribute('transform',`translate(${x},${y})`);
       const lab=host.querySelector(`#covlab-${v.job}`);

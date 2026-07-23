@@ -92,11 +92,15 @@ Views.precision = {
   /* 서비스 신청 필지와 싱크된 필지 선택 바 */
   fieldPicker(){
     const ids=PRECISION_REQ.map(r=>r.field);
+    /* PRECISION_REQ에 없는 필지로 진입한 경우(맵 팝업 딥링크 등) 임시 칩으로 노출 */
+    const extra = (this.paField && !ids.includes(this.paField)) ? this.paField : null;
+    const mkBtn=(id,state)=>{ const f=FIELDS.find(x=>x.id===id); if(!f) return '';
+      return `<button class="${this.paField===id?'active':''}" onclick="Views.precision.paField='${id}';App.rerender()">${f.name} <span class="mono" style="font-size:9px;opacity:.7">${state}</span></button>`; };
     return `<div class="filter-bar" style="margin-bottom:16px">
       <span style="font-size:12px;font-weight:700;color:var(--ink-2)">필지 선택</span>
       <div class="seg" style="flex-wrap:wrap">
-        ${ids.map(id=>{ const f=FIELDS.find(x=>x.id===id), req=PRECISION_REQ.find(r=>r.field===id);
-          return `<button class="${this.paField===id?'active':''}" onclick="Views.precision.paField='${id}';App.rerender()">${f.name} <span class="mono" style="font-size:9px;opacity:.7">${req.state}</span></button>`;}).join('')}
+        ${extra?mkBtn(extra,'미신청'):''}
+        ${ids.map(id=>mkBtn(id, PRECISION_REQ.find(r=>r.field===id).state)).join('')}
       </div>
       <span class="deep-note" style="margin-left:auto">${App.icon('link',12)} 서비스 신청(8.1) 필지와 진단·처방 데이터가 싱크됩니다</span>
     </div>`;

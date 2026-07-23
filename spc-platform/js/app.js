@@ -53,6 +53,7 @@ const App = {
     photo:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m5 18 5-5 3 3 3.5-3.5L20 16"/>',
     send:'<path d="m4 11 16-7-5.5 16-3-6.5L4 11Z"/>',
     mic:'<rect x="9.2" y="3" width="5.6" height="11" rx="2.8"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21"/>',
+    menu:'<path d="M3.5 6h17M3.5 12h17M3.5 18h17"/>',
   },
   icon(name, size=17){
     const p=this._icons[name]||this._icons.info;
@@ -66,7 +67,7 @@ const App = {
     this.go('dashboard');
     document.addEventListener('keydown',e=>{
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); this.toggleCmdk(true); }
-      if(e.key==='Escape'){ this.toggleCmdk(false); this.closeDrawer(); this.closeModal(); }
+      if(e.key==='Escape'){ this.toggleCmdk(false); this.closeDrawer(); this.closeModal(); this.toggleSidebar(false); }
     });
     /* 접속 시 일정 확률로 AI Agent 선제 알림 말풍선 1개 표출 */
     setTimeout(()=>this.maybeProactive(), 2200);
@@ -123,6 +124,7 @@ const App = {
       </aside>
       <div class="main">
         <header class="topbar">
+          <button class="hamburger" id="hamburger" onclick="App.toggleSidebar()" aria-label="메뉴 열기">${this.icon('menu',20)}</button>
           <div class="crumb" id="crumb"></div>
           <button class="search-pill" onclick="App.toggleCmdk(true)">${this.icon('search',15)} 기능·필지·장비 검색 <kbd>Ctrl K</kbd></button>
           <div class="noti-wrap">
@@ -145,6 +147,7 @@ const App = {
         <div class="action-bar" id="actionBarHost"></div>
       </div>
     </div>
+    <div class="sidebar-veil" id="sidebarVeil" onclick="App.toggleSidebar(false)"></div>
     <div class="drawer-veil" id="drawerVeil" onclick="App.closeDrawer()"></div>
     <aside class="drawer" id="drawer"></aside>
     <div class="modal-veil" id="modalVeil" onclick="if(event.target===this)App.closeModal()"><div class="modal" id="modalBox"></div></div>
@@ -202,6 +205,13 @@ const App = {
   toggleRoleMenu(force){
     document.getElementById('roleMenu').classList.toggle('open',force);
   },
+  /* 모바일 오프캔버스 사이드바 (햄버거) */
+  sidebarOpen:false,
+  toggleSidebar(force){
+    this.sidebarOpen = force!==undefined? force : !this.sidebarOpen;
+    document.getElementById('sidebar')?.classList.toggle('mobile-open',this.sidebarOpen);
+    document.getElementById('sidebarVeil')?.classList.toggle('open',this.sidebarOpen);
+  },
   notiOpen:false,
   toggleNoti(force){
     this.notiOpen = force!==undefined? force : !this.notiOpen;
@@ -247,6 +257,7 @@ const App = {
     if(prevRoute==='map'&&route!=='map') MapView.destroy();
     this.route=route; this.params=params;
     this.hideActionBar();
+    if(this.sidebarOpen) this.toggleSidebar(false);
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
     this.renderNav();
     const content=document.getElementById('content');

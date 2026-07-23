@@ -23,14 +23,14 @@ function permBadge(key){
 Views.dashboard = {
   render(){
     const r = App.role;
-    const todayJobs = JOBS.filter(j=>j.date==='07.22'||j.status==='run'||j.status==='issue');
+    const todayJobs = JOBS.filter(j=>j.date===DEMO_TODAY.md||j.status==='run'||j.status==='issue');
     const running = JOBS.filter(j=>j.status==='run').length;
     const cnt = { work:EQUIP.filter(e=>e.status==='work').length, move:EQUIP.filter(e=>e.status==='move').length,
                   idle:EQUIP.filter(e=>e.status==='idle').length, maint:EQUIP.filter(e=>e.status==='maint').length };
     return `<div class="page-enter">
       <div class="page-head">
         <div>
-          <div class="eyebrow">OPERATIONS · 2026.07.22 (수)</div>
+          <div class="eyebrow">OPERATIONS · ${DEMO_TODAY.label}</div>
           <h1>${r.name}님, 오늘 ${todayJobs.length}건의 작업이 잡혀 있습니다</h1>
           <div class="sub">${r.org} · ${WEATHER.desc} ${WEATHER.temp}° · ${WEATHER.rain} <span class="chip chip-amber" style="margin-left:6px">호우 예비특보</span></div>
         </div>
@@ -91,7 +91,7 @@ Views.dashboard = {
 
         <div class="card">
           <div class="card-head"><h3>알림 센터</h3><span class="chip chip-gray mono" style="font-size:10px">1.1.4</span>
-            <button class="more" onclick="App.toast('모든 알림을 읽음 처리했습니다')">모두 읽음</button></div>
+            <button class="more" onclick="NOTIS.forEach(n=>n.unread=false);App.toast('모든 알림을 읽음 처리했습니다');App.rerender()">모두 읽음</button></div>
           <div class="card-pad" style="padding-top:8px">
             ${NOTIS.slice(0,4).map(n=>`
               <div class="alert-row ${n.unread?'unread':''}" style="cursor:pointer" onclick="App.go('${n.link}')">
@@ -211,20 +211,22 @@ Views.farm = {
     const isFarmer=App.role.id==='farmer';
     return `${isFarmer?`<div class="perm-note">${App.icon('info')} <div>개인 농민 권한에서는 <b>본인 정보만 조회</b>됩니다. 소속 농가 전체 관리는 법인 관리자·SPC Admin 권한입니다.</div></div>`:''}
     <div class="filter-bar">
-      <div class="f-search">${App.icon('search')}<input placeholder="이름·연락처 검색"></div>
-      <select class="f-select"><option>공유 상태 전체</option><option>농협 공유</option><option>SPC 공유</option></select>
+      <div class="f-search">${App.icon('search')}<input id="custSearch" placeholder="이름·연락처 검색" oninput="Views.farm.filterCust()"></div>
+      <select class="f-select" id="custShare" onchange="Views.farm.filterCust()">
+        <option value="">공유 상태 전체</option><option value="농협">농협 공유</option><option value="SPC">SPC 공유</option><option value="-">미공유</option></select>
       <div style="margin-left:auto" class="deep-note">${App.icon('link')} 고객-농장-필지-장비 권한 매핑 구조</div>
     </div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>고객명</th><th>연락처</th><th>소유 농장</th><th class="t-num">필지</th><th class="t-num">등록 장비</th><th>데이터 공유</th><th>가입</th><th></th></tr></thead>
-      <tbody>${(isFarmer?CUSTOMERS.slice(0,1):CUSTOMERS).map(c=>`
-        <tr onclick="Views.farm.custDrawer('${c.name}')">
+      <tbody id="custBody">${(isFarmer?CUSTOMERS.slice(0,1):CUSTOMERS).map(c=>`
+        <tr data-row data-name="${c.name}" data-ph="${c.ph}" data-share="${c.share}" onclick="Views.farm.custDrawer('${c.name}')">
           <td class="t-strong">${c.name}</td><td class="mono" style="font-size:12px">${c.ph}</td><td>${c.farms}</td>
           <td class="t-num">${c.plots}</td><td class="t-num">${c.equip}</td>
           <td>${c.share==='-'?'<span class="chip chip-gray">미공유</span>':c.share.split('·').map(s=>`<span class="chip chip-blue" style="margin-right:3px">${s}</span>`).join('')}</td>
           <td class="mono" style="font-size:11.5px;color:var(--ink-3)">${c.since}</td>
           <td><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();App.toast('권한 위임 설정 (데모)')">권한</button></td>
-        </tr>`).join('')}</tbody>
+        </tr>`).join('')}
+        <tr id="custEmpty" style="display:none"><td colspan="8" style="text-align:center;color:var(--ink-3);padding:24px">검색 결과가 없습니다</td></tr></tbody>
     </table></div>`;
   },
   custDrawer(name){
@@ -267,15 +269,15 @@ Views.farm = {
     const warn=FIELDS.filter(f=>f.hazard.level!=='정상');
     return `${warn.length?`<div class="perm-note" style="background:var(--red-soft);border-color:#F6D3CE;color:#8A2A22">${App.icon('sos')} <div><b>재해경보 ${warn.length}건</b> — ${warn.map(f=>`${f.name}(${f.hazard.level})`).join(', ')}. 국립농업과학원 농업기상재해 조기경보서비스 연계. <a style="color:var(--red);font-weight:700;cursor:pointer" onclick='App.go("map",{layers:["LY-11","LY-10"]})'>통합 맵에서 보기 →</a></div></div>`:''}
     <div class="filter-bar">
-      <div class="f-search">${App.icon('search')}<input placeholder="필지명·ID·주소 검색"></div>
-      <select class="f-select"><option>작물 전체</option><option>벼</option><option>콩</option><option>밀</option><option>사과</option></select>
-      <select class="f-select"><option>재해경보 전체</option><option>정상</option><option>주의</option><option>경고</option></select>
+      <div class="f-search">${App.icon('search')}<input id="plotSearch" placeholder="필지명·ID·주소 검색" oninput="Views.farm.filterPlot()"></div>
+      <select class="f-select" id="plotCrop" onchange="Views.farm.filterPlot()"><option value="">작물 전체</option><option value="벼">벼</option><option value="콩">콩</option><option value="밀">밀</option><option value="사과">사과</option></select>
+      <select class="f-select" id="plotHazard" onchange="Views.farm.filterPlot()"><option value="">재해경보 전체</option><option value="정상">정상</option><option value="주의">주의</option><option value="경고">경고</option></select>
       <div style="margin-left:auto">${mapBtn('전체 필지 맵에서 보기',{layers:['LY-10']})}</div>
     </div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>필지</th><th>주소</th><th class="t-num">면적(평)</th><th>작물</th><th>재해경보</th><th>농장/소유</th><th>경계</th><th></th></tr></thead>
-      <tbody>${FIELDS.map(f=>{ const [hc]=HAZARD_META[f.hazard.level];
-        return `<tr onclick="Views.farm.plotDrawer('${f.id}')">
+      <tbody id="plotBody">${FIELDS.map(f=>{ const [hc]=HAZARD_META[f.hazard.level];
+        return `<tr data-row data-name="${f.name}" data-id="${f.id}" data-addr="${f.addr}" data-crop="${f.crop}" data-hazard="${f.hazard.level}" onclick="Views.farm.plotDrawer('${f.id}')">
           <td><span class="t-strong">${f.name}</span><span class="t-sub mono">${f.id}</span></td>
           <td style="font-size:12.5px">${f.addr}</td><td class="t-num t-strong">${fmt(f.area)}</td>
           <td>${f.crop}</td>
@@ -283,8 +285,32 @@ Views.farm = {
           <td style="font-size:12.5px">${f.farm} · ${f.owner}</td>
           <td><span class="chip chip-blue">등록됨</span></td>
           <td><button class="btn btn-sm btn-map" onclick='event.stopPropagation();App.go("map",{focus:"${f.id}",layers:["LY-11","LY-10","LY-01"]})'>${App.icon('map',13)} 맵</button></td>
-        </tr>`;}).join('')}</tbody>
+        </tr>`;}).join('')}
+        <tr id="plotEmpty" style="display:none"><td colspan="8" style="text-align:center;color:var(--ink-3);padding:24px">검색 결과가 없습니다</td></tr></tbody>
     </table></div>`;
+  },
+  filterCust(){
+    const q=(document.getElementById('custSearch').value||'').trim().toLowerCase();
+    const share=document.getElementById('custShare').value;
+    let shown=0;
+    document.querySelectorAll('#custBody tr[data-row]').forEach(tr=>{
+      const okQ=!q||tr.dataset.name.toLowerCase().includes(q)||tr.dataset.ph.includes(q);
+      const okS=!share||(share==='-'?tr.dataset.share==='-':tr.dataset.share.includes(share));
+      const vis=okQ&&okS; tr.style.display=vis?'':'none'; if(vis)shown++;
+    });
+    const empty=document.getElementById('custEmpty'); if(empty) empty.style.display=shown?'none':'';
+  },
+  filterPlot(){
+    const q=(document.getElementById('plotSearch').value||'').trim().toLowerCase();
+    const crop=document.getElementById('plotCrop').value, hz=document.getElementById('plotHazard').value;
+    let shown=0;
+    document.querySelectorAll('#plotBody tr[data-row]').forEach(tr=>{
+      const okQ=!q||tr.dataset.name.toLowerCase().includes(q)||tr.dataset.id.toLowerCase().includes(q)||tr.dataset.addr.includes(q);
+      const okC=!crop||tr.dataset.crop.includes(crop);
+      const okH=!hz||tr.dataset.hazard===hz;
+      const vis=okQ&&okC&&okH; tr.style.display=vis?'':'none'; if(vis)shown++;
+    });
+    const empty=document.getElementById('plotEmpty'); if(empty) empty.style.display=shown?'none':'';
   },
   plotDrawer(fid){
     const f=FIELDS.find(x=>x.id===fid);
@@ -484,7 +510,8 @@ Views.equip = {
   regComplete(){
     const nick=document.getElementById('regNick').value||this.regNick;
     const n=EQUIP.filter(e=>e.model==='HX1400AI').length+1;
-    EQUIP.push({ id:'VH-00'+(EQUIP.length+1), model:'HX1400AI', type:'트랙터', nick, owner:'SPC 공용', status:'idle', amotion:true,
+    const nextNum=Math.max(0,...EQUIP.map(e=>parseInt((e.id.match(/\d+/)||[0])[0],10)))+1;
+    EQUIP.push({ id:'VH-'+String(nextNum).padStart(3,'0'), model:'HX1400AI', type:'트랙터', nick, owner:'SPC 공용', status:'idle', amotion:true,
       fuel:100, def:100, hours:0, todayH:0, field:null, job:null, speed:0, dtc:0, fw:'v2.4.1', tmu:'TMU-'+(8800+n) });
     App.closeModal(); App.toast(`'${nick}' 등록 완료 — 차량 현황 목록에 추가되었습니다`);
     App.go('equip',{tab:'status'});
@@ -514,11 +541,16 @@ Views.equip = {
         return `<div class="card kpi" style="padding:14px 18px"><div class="k-label"><span class="chip chip-${c}">${t}</span></div>
           <div class="k-value" style="font-size:24px">${n}<small>대</small></div></div>`; }).join('')}
     </div>
+    <div class="filter-bar">
+      <div class="f-search">${App.icon('search')}<input id="eqSearch" placeholder="장비명·ID·모델 검색" oninput="Views.equip.filterStatus()"></div>
+      <select class="f-select" id="eqStatus" onchange="Views.equip.filterStatus()"><option value="">상태 전체</option>${Object.entries(EQUIP_STATUS).map(([k,[t]])=>`<option value="${k}">${t}</option>`).join('')}</select>
+      <select class="f-select" id="eqAmotion" onchange="Views.equip.filterStatus()"><option value="">자율작업 전체</option><option value="1">A-Motion만</option></select>
+    </div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>장비</th><th>상태</th><th>소유/공유</th><th class="t-num">연료</th><th class="t-num">DEF</th><th class="t-num">가동(h)</th><th>DTC</th><th>현재 작업</th><th></th></tr></thead>
-      <tbody>${EQUIP.map(v=>{
+      <tbody id="eqBody">${EQUIP.map(v=>{
         const [st,c]=EQUIP_STATUS[v.status]; const job=JOBS.find(j=>j.id===v.job);
-        return `<tr onclick="Views.equip.vehDrawer('${v.id}')">
+        return `<tr data-row data-search="${(v.nick+' '+v.id+' '+v.model).toLowerCase()}" data-status="${v.status}" data-amotion="${v.amotion?1:0}" onclick="Views.equip.vehDrawer('${v.id}')">
           <td><span class="t-strong">${v.nick}</span><span class="t-sub mono">${v.id} · ${v.tmu}</span></td>
           <td><span class="chip chip-${c}"><span class="cd" style="background:currentColor"></span>${st}</span>${v.amotion?' <span class="chip chip-purple">A-Motion</span>':''}</td>
           <td style="font-size:12.5px">${v.owner}</td>
@@ -528,8 +560,21 @@ Views.equip = {
           <td>${v.dtc?`<span class="chip chip-red">${v.dtcCode}</span>`:'<span class="chip chip-gray">정상</span>'}</td>
           <td style="font-size:12.5px">${job?job.name:'-'}</td>
           <td><button class="btn btn-sm btn-map" onclick='event.stopPropagation();App.go("map",{layers:["LY-01","LY-02","LY-10"],focus:${JSON.stringify(v.field)}})'>${App.icon('map',13)} 맵</button></td>
-        </tr>`; }).join('')}</tbody>
+        </tr>`; }).join('')}
+        <tr id="eqEmpty" style="display:none"><td colspan="9" style="text-align:center;color:var(--ink-3);padding:24px">검색 결과가 없습니다</td></tr></tbody>
     </table></div>`;
+  },
+  filterStatus(){
+    const q=(document.getElementById('eqSearch').value||'').trim().toLowerCase();
+    const st=document.getElementById('eqStatus').value, am=document.getElementById('eqAmotion').value;
+    let shown=0;
+    document.querySelectorAll('#eqBody tr[data-row]').forEach(tr=>{
+      const okQ=!q||tr.dataset.search.includes(q);
+      const okS=!st||tr.dataset.status===st;
+      const okA=!am||tr.dataset.amotion==='1';
+      const vis=okQ&&okS&&okA; tr.style.display=vis?'':'none'; if(vis)shown++;
+    });
+    const empty=document.getElementById('eqEmpty'); if(empty) empty.style.display=shown?'none':'';
   },
   vehDrawer(vid){
     const v=EQUIP.find(x=>x.id===vid); const [st,c]=EQUIP_STATUS[v.status];
@@ -1023,7 +1068,7 @@ Views.work = {
       </div>`:'';
     /* 과거 날짜 → 데이터 히스토리 불러오기 (6.3.2 연계) */
     const dv=document.getElementById('plDate').value;
-    const isPast = dv < '2026-07-22';
+    const isPast = dv < DEMO_TODAY.iso;
     document.getElementById('plPast').innerHTML = isPast ? `
       <div style="background:var(--blue-soft);border:1px solid #C4D6F7;border-radius:12px;padding:13px 15px;margin-top:10px;animation:popIn .25s var(--ease)">
         <div style="display:flex;align-items:center;gap:9px">
@@ -1042,11 +1087,13 @@ Views.work = {
     const type=document.getElementById('plType').value;
     const vehId=document.getElementById('plVeh').value||null;
     const veh=EQUIP.find(e=>e.id===vehId);
-    const isPast=date<'2026-07-22';
+    const isPast=date<DEMO_TODAY.iso;
     const mmdd=date.slice(5).replace('-','.');
     JOBS.push({ id:'JOB-'+(108+JOBS.length-7), name:`${f.name} ${type}`, cat:this._plCat, type,
       amotion:!!(veh&&veh.amotion), status:isPast?'done':'wait', field:fid, veh:vehId,
       prog:isPast?100:0, date:mmdd, area:f.area, team:this._plCat==='대행'?'배차 대기':null, hours:isPast?2.8:0, fuel:isPast?21:0 });
+    /* 등록한 날짜(7월)를 캘린더에서 하이라이트 */
+    this._justAddedDay = date.slice(0,7)==='2026-07' ? parseInt(date.slice(8,10),10) : null;
     App.closeModal();
     App.toast(`'${f.name} ${type}' 계획이 캘린더에 등록되었습니다${isPast?' (과거 작업 소급 기록)':''}`);
     App.go('work',{tab:'plan'});
@@ -1074,7 +1121,7 @@ Views.work = {
       <div class="seg">
         ${list.map(v=>`<button class="${this.histVeh===v.id?'active':''}" onclick="Views.work.histVeh='${v.id}';App.rerender()">${v.model}</button>`).join('')}
       </div>
-      <select class="f-select"><option>작업기 전체</option><option>로터리 WJ2000</option><option>붐스프레이어</option></select>
+      <select class="f-select" id="dhImpl" onchange="Views.work.filterDataHist()"><option value="">작업기 전체</option>${[...new Set(rows.map(r=>r.impl).filter(i=>i&&i!=='-'))].map(i=>`<option value="${i}">${i}</option>`).join('')}</select>
       <div style="margin-left:auto">${mapBtn('주행경로 이력 맵',{layers:['LY-05','LY-04','LY-10']})}</div>
     </div>
     <div class="grid cols-4" style="margin-bottom:16px">
@@ -1084,12 +1131,13 @@ Views.work = {
     <div class="grid" style="grid-template-columns:1.3fr .7fr">
       <div class="tbl-wrap"><table class="tbl">
         <thead><tr><th>작업일</th><th>작업</th><th>작업기</th><th class="t-num">가동(h)</th><th class="t-num">면적(평)</th><th class="t-num">연료(L)</th><th class="t-num">평균속도</th><th>출처</th></tr></thead>
-        <tbody>${rows.map(r=>`
-          <tr onclick="App.toast('${r.date} 상세 운행 데이터 — 경로·속도 프로파일 (데모)')">
+        <tbody id="dhBody">${rows.map(r=>`
+          <tr data-row data-impl="${r.impl}" onclick="App.toast('${r.date} 상세 운행 데이터 — 경로·속도 프로파일 (데모)')">
             <td class="mono" style="font-size:12px">${r.date}</td><td class="t-strong">${r.job}</td><td style="font-size:12px">${r.impl}</td>
             <td class="t-num">${r.hours}</td><td class="t-num">${fmt(r.area)}</td><td class="t-num">${r.fuel}</td><td class="t-num">${r.avgSpeed}km/h</td>
             <td><span class="chip ${r.src==='A-Motion'?'chip-purple':r.src==='대행'?'chip-blue':r.src==='과거 등록'?'chip-amber':'chip-gray'}">${r.src}</span></td>
-          </tr>`).join('')}</tbody>
+          </tr>`).join('')}
+          <tr id="dhEmpty" style="display:none"><td colspan="8" style="text-align:center;color:var(--ink-3);padding:24px">선택한 작업기의 기록이 없습니다</td></tr></tbody>
       </table></div>
       <div class="card card-pad">
         <h3 style="margin-bottom:10px">월별 가동시간</h3>
@@ -1097,6 +1145,14 @@ Views.work = {
         <div class="deep-note" style="margin-top:10px">${App.icon('route')} 차량 운행·작업기 데이터는 TMU/ISOBUS에서 수집되어 차량별로 축적됩니다</div>
       </div>
     </div>`;
+  },
+  filterDataHist(){
+    const impl=document.getElementById('dhImpl').value;
+    let shown=0;
+    document.querySelectorAll('#dhBody tr[data-row]').forEach(tr=>{
+      const vis=!impl||tr.dataset.impl===impl; tr.style.display=vis?'':'none'; if(vis)shown++;
+    });
+    const empty=document.getElementById('dhEmpty'); if(empty) empty.style.display=shown?'none':'';
   },
 
   /* ---- 6.2 캘린더 (JOBS 연동 — 계획 추가 시 자동 표출, 클릭 시 작업 상세) ---- */
@@ -1109,15 +1165,17 @@ Views.work = {
       (evts[d]=evts[d]||[]).push([j.name, cls, j.id]);
     });
     [[8,'자재 입고 — 비료','e-amber'],[28,'생육진단 드론 촬영 (예약)','e-amber']].forEach(([d,t,c])=>{ (evts[d]=evts[d]||[]).push([t,c,null]); });
+    const added=this._justAddedDay;
     let cells=''; const firstDow=3, days=31;
     for(let i=0;i<firstDow;i++) cells+=`<div class="cal-cell dim"><span class="cd-num">${28+i}</span></div>`;
     for(let d=1;d<=days;d++){
       const dd=String(d).padStart(2,'0');
-      cells+=`<div class="cal-cell ${d===22?'today':''}" onclick="Views.work.planModal('2026-07-${dd}')" title="클릭하여 작업 계획 추가">
+      cells+=`<div class="cal-cell ${d===DEMO_TODAY.dom?'today':''} ${d===added?'just-added':''}" ${d===added?'data-added="1"':''} onclick="Views.work.planModal('2026-07-${dd}')" title="클릭하여 작업 계획 추가">
         <span class="cd-num">${d}</span>
         ${(evts[d]||[]).map(([t,c,jid])=>`<div class="cal-evt ${c}" ${jid?`onclick="event.stopPropagation();App.go('work',{tab:'status',job:'${jid}'})" title="작업 상세 보기"`:''}>${t}</div>`).join('')}
       </div>`;
     }
+    this._justAddedDay=null;   /* 하이라이트는 1회성 */
     return `<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px">
       <div style="min-width:0">
         <div class="filter-bar" style="margin-bottom:12px">
@@ -1582,5 +1640,8 @@ Views.work = {
       </div>
     </div>`;
   },
-  bind(root){ Charts.arm(root); this.syncActionBar(); }
+  bind(root){ Charts.arm(root); this.syncActionBar();
+    const added=root.querySelector('.cal-cell[data-added]');
+    if(added) requestAnimationFrame(()=>added.scrollIntoView({block:'center',behavior:'smooth'}));
+  }
 };
