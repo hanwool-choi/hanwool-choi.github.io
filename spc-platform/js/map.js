@@ -203,7 +203,7 @@ const MapView = (() => {
             <span class="chip chip-amber" style="font-size:9.5px">${ev.type}</span>
             <span style="margin-left:auto;color:var(--ink-3);font-size:10px">${ev.act}</span></div>`).join('')}
         </div>
-        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:9px" onclick="App.toast('Snapshot 이미지 조회 (전방 카메라·작업기 뷰) — 데모')">${App.icon('photo',13)} Snapshot 확인</button>
+        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:9px" onclick="MapView.snapshot()">${App.icon('photo',13)} Snapshot 확인</button>
         <div class="as-actions" style="margin-top:9px">
           <button class="btn btn-sm ${paused?'btn-navy':'btn-primary'}" style="flex:1" onclick="MapView.toggleAmPause()" ${ret?'disabled style="opacity:.5;flex:1"':''}>${App.icon(paused?'play':'pause')} ${paused?'재개':'일시정지'}</button>
           <button class="btn btn-sm ${ret?'btn-navy':'btn-ghost'}" style="flex:1" onclick="MapView.amReturn()">${App.icon('route')} ${ret?'복귀 중':'복귀'}</button>
@@ -759,6 +759,87 @@ const MapView = (() => {
   }
   function setRecPeriod(p){ state.recPeriod=p; render(); }
 
-  return { init, destroy, focusField, enterAmotion, closeAmotion, toggleAmPause, amReturn, setRecPeriod,
+  /* ---------------- A-Motion Snapshot — 트랙터 지붕 4방향 카메라 뷰 ---------------- */
+  function camView(dir){
+    /* dir: front / rear / left / right — 트랙터 루프캠 시점의 필지 주행 사진(일러스트) */
+    const rows = n => { let s=''; for(let i=0;i<n;i++) s+=i; return s; };
+    const SK=`skg-${dir}`, SL=`soil-${dir}`;
+    let scene='';
+    if(dir==='front'){
+      /* 전방: 지평선으로 수렴하는 작물 이랑 + 보닛 */
+      let conv=''; for(let i=-7;i<=7;i++){ conv+=`<line x1="160" y1="86" x2="${160+i*46}" y2="210" stroke="#3C6B3F" stroke-width="${1.4+Math.abs(i)*0.15}" opacity=".55"/>`; }
+      let crop=''; for(let i=-7;i<=7;i++){ crop+=`<line x1="160" y1="86" x2="${160+i*46}" y2="210" stroke="#8FBE6B" stroke-width="2.4" opacity=".5" transform="translate(${i*1.5},0)"/>`; }
+      scene=`<rect width="320" height="88" fill="url(#${SK})"/>
+        <ellipse cx="250" cy="40" rx="26" ry="24" fill="#FFF4CE" opacity=".7"/>
+        <rect y="78" width="320" height="12" fill="#5E7A4C"/>
+        <rect y="86" width="320" height="124" fill="#6F9A55"/>
+        ${conv}${crop}
+        <path d="M0 210 L0 176 Q160 150 320 176 L320 210 Z" fill="#1E2A22"/>
+        <path d="M60 210 L86 180 L234 180 L260 210 Z" fill="#20272F"/>
+        <rect x="120" y="176" width="80" height="7" rx="3" fill="#E5352C"/><text x="160" y="182" text-anchor="middle" font-size="5.5" fill="#fff" font-family="var(--font)">HX1400AI</text>`;
+    } else if(dir==='rear'){
+      /* 후방: 경운된 어두운 흙 이랑 + 로터리 작업기 바 */
+      let fur=''; for(let i=0;i<11;i++){ const y=96+i*10.4; fur+=`<line x1="${-20+i*2}" y1="${y}" x2="${340-i*2}" y2="${y}" stroke="#5A4327" stroke-width="${1+i*0.35}" opacity=".65"/>`; }
+      scene=`<rect width="320" height="90" fill="url(#${SK})"/>
+        <rect y="72" width="320" height="8" fill="#6E8B5A"/>
+        <rect y="80" width="320" height="14" fill="#7FA865"/>
+        <rect y="94" width="320" height="116" fill="url(#${SL})"/>
+        ${fur}
+        <rect y="188" width="320" height="22" fill="#20272F"/>
+        <rect y="184" width="320" height="6" fill="#E5352C" opacity=".85"/>
+        ${Array.from({length:22},(_,i)=>`<rect x="${8+i*14}" y="190" width="7" height="18" rx="2" fill="#39424E"/>`).join('')}
+        <text x="160" y="203" text-anchor="middle" font-size="6" fill="#B9C2CE" font-family="var(--font)">로터리 WJ2000 · 경심 22cm</text>`;
+    } else {
+      /* 좌/우 측면: 나란한 이랑 + 필지 경계(두렁) */
+      const mir = dir==='left' ? 1 : -1;
+      let side=''; for(let i=0;i<9;i++){ const y=104+i*12; side+=`<path d="M${mir>0?0:320} ${y} Q160 ${y-14} ${mir>0?320:0} ${y+22}" fill="none" stroke="#4C7A4E" stroke-width="${1.6+i*0.2}" opacity=".5"/>`; }
+      scene=`<rect width="320" height="96" fill="url(#${SK})"/>
+        <rect y="80" width="320" height="10" fill="#6E8B5A"/>
+        <rect y="90" width="320" height="120" fill="#729A56"/>
+        <!-- 두렁(경계) -->
+        <path d="M${mir>0?0:320} 96 Q160 90 ${mir>0?320:0} 132 L${mir>0?320:0} 120 Q160 80 ${mir>0?0:320} 90 Z" fill="#8A9B5E" opacity=".9"/>
+        ${side}
+        <!-- 인접 필지 원경 -->
+        <rect y="86" width="320" height="8" fill="#7EA363" opacity=".7"/>
+        <!-- 바퀴 일부 -->
+        <ellipse cx="${mir>0?36:284}" cy="205" rx="40" ry="30" fill="#20272F"/><ellipse cx="${mir>0?36:284}" cy="205" rx="19" ry="14" fill="#4A5560"/>`;
+    }
+    const LABEL={front:'전방 FRONT',rear:'후방 REAR',left:'좌측면 LEFT',right:'우측면 RIGHT'}[dir];
+    return `<div style="position:relative;border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);border:1px solid var(--line)">
+      <svg viewBox="0 0 320 210" style="width:100%;display:block" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <linearGradient id="${SK}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9EC2E4"/><stop offset="1" stop-color="#DCE9DA"/></linearGradient>
+          <linearGradient id="${SL}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6B5334"/><stop offset="1" stop-color="#3E2F1B"/></linearGradient>
+        </defs>
+        ${scene}
+        <!-- HUD -->
+        <rect x="0" y="0" width="320" height="210" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1"/>
+        <line x1="150" y1="105" x2="170" y2="105" stroke="rgba(255,255,255,.5)" stroke-width="1"/><line x1="160" y1="95" x2="160" y2="115" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+        <g transform="translate(8,8)"><rect width="86" height="16" rx="3" fill="rgba(20,25,32,.7)"/><circle cx="9" cy="8" r="3" fill="#E5352C"/><text x="17" y="11.5" font-size="8" font-weight="700" fill="#fff" font-family="var(--font)">${LABEL}</text></g>
+        <g transform="translate(232,8)"><rect width="80" height="16" rx="3" fill="rgba(20,25,32,.7)"/><text x="40" y="11.5" text-anchor="middle" font-size="7.5" fill="#5BE49B" font-family="var(--mono)">26/07/23 10:14</text></g>
+      </svg>
+    </div>`;
+  }
+  function snapshot(){
+    const v=EQUIP.find(e=>e.id==='VH-001'), j=JOBS.find(x=>x.id==='JOB-104');
+    App.modal(`Snapshot — ${v.nick}`, `
+      <div style="padding:18px 22px">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <span class="chip chip-purple">${App.icon('bot',12)} A-Motion 관제</span>
+          <span style="font-size:12.5px;color:var(--ink-2)">${j.name} · 진행 ${Math.round(state.vehProg['VH-001']*100)}%</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--ink-3)">루프캠 4방향 · 2026-07-23 10:14:02</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${['front','rear','left','right'].map(camView).join('')}
+        </div>
+        <div class="perm-note" style="margin-top:14px">${App.icon('info')} <div>트랙터 지붕에 설치된 4방향 카메라의 실시간 스냅샷입니다. 전방(진행 경로·작업기), 후방(경운 상태), 좌·우 측면(필지 경계·인접 이랑)을 확인해 무인 자율작업 상태를 원격 점검할 수 있습니다.</div></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-ghost" onclick="App.toast('스냅샷 4장을 저장했습니다 (데모)')">${App.icon('download')} 저장</button>
+          <button class="btn btn-navy" onclick="App.closeModal()">닫기</button>
+        </div>
+      </div>`);
+  }
+
+  return { init, destroy, focusField, enterAmotion, closeAmotion, toggleAmPause, amReturn, setRecPeriod, snapshot,
     applyPreset(p){ if(!state) return; init(host,p); } };
 })();
