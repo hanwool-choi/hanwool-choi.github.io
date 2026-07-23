@@ -93,18 +93,29 @@ function rectPoly(x,y,w,h,j=3){
   const r=(n)=>n+(Math.sin(x*y+n)*j);
   return [[r(x),r(y)],[r(x+w),r(y)+1],[x+w+Math.sin(y)*j, y+h],[x-Math.sin(x)*j, y+h-1]];
 }
+/* hazard(재해경보): 국립농업과학원 농업기상재해 조기경보서비스 참조 — 정상/주의/경고 */
 const FIELDS = [
-  { id:'GJ-R1', name:'안들 1',   poly:rectPoly(120, 70,150,150), area:1216, crop:'벼(신동진)', farm:'안들농장',  owner:'김철수', addr:'김제시 부량면 신용리 12',   tone:'#7FA96B' },
-  { id:'GJ-R2', name:'안들 2',   poly:rectPoly(120,240,150,130), area:1216, crop:'벼(신동진)', farm:'안들농장',  owner:'김철수', addr:'김제시 부량면 신용리 12-1', tone:'#8FB377' },
-  { id:'GJ-R3', name:'안들 3',   poly:rectPoly(120,390,150,160), area:1230, crop:'벼(참동진)', farm:'안들농장',  owner:'김철수', addr:'김제시 부량면 신용리 12-2', tone:'#6E9C5E' },
-  { id:'GJ-R4', name:'윗배미',   poly:rectPoly(300, 90,140,190), area:987,  crop:'콩(대원)',   farm:'햇살농장',  owner:'이명희', addr:'김제시 부량면 신용리 18',   tone:'#A3B96F' },
-  { id:'GJ-R5', name:'아랫배미', poly:rectPoly(300,300,140,180), area:1054, crop:'벼(신동진)', farm:'햇살농장',  owner:'이명희', addr:'김제시 부량면 신용리 18-3', tone:'#7FA96B' },
-  { id:'GJ-R6', name:'모산들',   poly:rectPoly(300,500,140,170), area:1192, crop:'벼(신동진)', farm:'모산농장',  owner:'박민수', addr:'김제시 부량면 옥동리 6',    tone:'#88AE72' },
-  { id:'GJ-R7', name:'사과과수원',poly:rectPoly(520,110,170,170), area:870,  crop:'사과(부사)', farm:'사과농장',  owner:'최정자', addr:'김제시 부량면 옥동리 21',   tone:'#5E8C52' },
-  { id:'GJ-R8', name:'큰들',     poly:rectPoly(520,320,170,200), area:2210, crop:'벼(참동진)', farm:'큰들농장',  owner:'정대호', addr:'김제시 부량면 옥동리 33',   tone:'#79A465' },
-  { id:'GJ-R9', name:'부식리들', poly:rectPoly(760,150,180,210), area:1875, crop:'밀(금강)',   farm:'부식농장',  owner:'한미경', addr:'김제시 부량면 부식리 8',    tone:'#B4AF6A' },
-  { id:'GJ-R10',name:'옥산 대전',poly:rectPoly(760,400,180,230), area:2540, crop:'벼(신동진)', farm:'옥산농장',  owner:'서경수', addr:'김제시 부량면 옥산리 41',   tone:'#749F62' },
+  { id:'GJ-R1', name:'안들 1',   poly:rectPoly(120, 70,150,150), area:1216, crop:'벼(신동진)', farm:'안들농장',  owner:'김철수', addr:'김제시 부량면 신용리 12',   tone:'#7FA96B', hazard:{level:'정상'} },
+  { id:'GJ-R2', name:'안들 2',   poly:rectPoly(120,240,150,130), area:1216, crop:'벼(신동진)', farm:'안들농장',  owner:'김철수', addr:'김제시 부량면 신용리 12-1', tone:'#8FB377', hazard:{level:'정상'} },
+  { id:'GJ-R3', name:'안들 3',   poly:rectPoly(120,390,150,160), area:1230, crop:'벼(참동진)', farm:'안들농장',  owner:'김철수', addr:'김제시 부량면 신용리 12-2', tone:'#6E9C5E', hazard:{level:'정상'} },
+  { id:'GJ-R4', name:'윗배미',   poly:rectPoly(300, 90,140,190), area:987,  crop:'콩(대원)',   farm:'햇살농장',  owner:'이명희', addr:'김제시 부량면 신용리 18',   tone:'#A3B96F',
+    hazard:{ level:'경고', type:'습해(지발성)', eta:'약 4일 후 (07.27경)', prob:82,
+      detail:'최근 강우 누적과 배수 불량으로 콩(조생종) 생육기 습해가 예상됩니다. 근권부 산소 부족으로 뿌리 활력 저하·황화 우려.',
+      action:'① 배수로 정비·명거배수 확보 ② 습해 예상 구역 요소 엽면시비 ③ 강우 예보 시 방제 일정 순연' } },
+  { id:'GJ-R5', name:'아랫배미', poly:rectPoly(300,300,140,180), area:1054, crop:'벼(신동진)', farm:'햇살농장',  owner:'이명희', addr:'김제시 부량면 신용리 18-3', tone:'#7FA96B',
+    hazard:{ level:'주의', type:'고온해(등숙기)', eta:'금주 후반', prob:54,
+      detail:'일 최고기온 33℃ 이상 지속 시 등숙 불량·백수 우려가 있습니다.',
+      action:'① 물 걸러대기로 지온 조절 ② 규산질 비료 시용으로 도복·고온 저항성 강화' } },
+  { id:'GJ-R6', name:'모산들',   poly:rectPoly(300,500,140,170), area:1192, crop:'벼(신동진)', farm:'모산농장',  owner:'박민수', addr:'김제시 부량면 옥동리 6',    tone:'#88AE72', hazard:{level:'정상'} },
+  { id:'GJ-R7', name:'사과과수원',poly:rectPoly(520,110,170,170), area:870,  crop:'사과(부사)', farm:'사과농장',  owner:'최정자', addr:'김제시 부량면 옥동리 21',   tone:'#5E8C52', hazard:{level:'정상'} },
+  { id:'GJ-R8', name:'큰들',     poly:rectPoly(520,320,170,200), area:2210, crop:'벼(참동진)', farm:'큰들농장',  owner:'정대호', addr:'김제시 부량면 옥동리 33',   tone:'#79A465', hazard:{level:'정상'} },
+  { id:'GJ-R9', name:'부식리들', poly:rectPoly(760,150,180,210), area:1875, crop:'밀(금강)',   farm:'부식농장',  owner:'한미경', addr:'김제시 부량면 부식리 8',    tone:'#B4AF6A',
+    hazard:{ level:'주의', type:'붉은곰팡이병', eta:'개화기 강우 시', prob:47,
+      detail:'출수·개화기 강우와 다습 조건에서 붉은곰팡이병(적미병) 발생 위험이 높아집니다.',
+      action:'① 개화 초기 적기 방제(1주 간격 2회) ② 수확 후 조기 건조로 독소 축적 방지' } },
+  { id:'GJ-R10',name:'옥산 대전',poly:rectPoly(760,400,180,230), area:2540, crop:'벼(신동진)', farm:'옥산농장',  owner:'서경수', addr:'김제시 부량면 옥산리 41',   tone:'#749F62', hazard:{level:'정상'} },
 ];
+const HAZARD_META = { '정상':['chip-green','#0E9F5A'], '주의':['chip-amber','#DE9207'], '경고':['chip-red','#E5352C'] };
 
 /* ---------- 장비 ---------- */
 const EQUIP = [
@@ -120,6 +131,8 @@ const EQUIP = [
     fuel:90, def:null, hours:311, todayH:0, field:null, job:null, speed:0, dtc:0, fw:'v1.2.4', tmu:'TMU-1130' },
   { id:'VH-006', model:'T25', type:'방제드론', nick:'방제드론 T25', owner:'SPC 공용', status:'maint', amotion:false,
     fuel:null, def:null, hours:207, todayH:0, field:null, job:null, speed:0, dtc:2, dtcCode:'E-041', fw:'v3.0.2', tmu:'TMU-9911' },
+  { id:'VH-007', model:'DJI Agras T50', type:'방제드론', nick:'DJI 드론 T50', owner:'SPC 공용', status:'idle', amotion:false, brand:'DJI',
+    fuel:88, def:null, hours:96, todayH:0, field:null, job:null, speed:0, dtc:0, fw:'v8.1.0', tmu:'TMU-2050' },
 ];
 const EQUIP_STATUS = { work:['작업중','green'], move:['이동중','blue'], idle:['유휴','gray'], maint:['정비필요','red'] };
 
@@ -245,6 +258,29 @@ const SOIL_REPORT = { field:'GJ-R3', ph:5.8, om:23, p:86, k:0.62, si:118, date:'
   rows:[['pH (산도)','5.8','6.0~6.5','낮음'],['유기물 (g/kg)','23','25~30','낮음'],['유효인산 (mg/kg)','86','80~120','적정'],['칼륨 (cmol+/kg)','0.62','0.50~0.60','높음'],['유효규산 (mg/kg)','118','157↑','낮음']] };
 const VRT_PLAN = { field:'GJ-R3', mat:'맞춤형 21-17-17', avg:24.3, min:16, max:33, saving:12.4, date:'2026-07-05' };
 
+/* 정밀농업 필지별 진단/처방 데이터 (PRECISION_REQ 신청 필지와 싱크) */
+const PA_FIELDS = {
+  'GJ-R3': { svc:'토양진단+처방', state:'진행',
+    soil:{ date:'2026-04-02', avg:'미사질양토', rows:SOIL_REPORT.rows, note:'pH·유기물·규산 보정 필요. 규산질 비료 250kg/10a 시용 후 심경 로터리 권장' },
+    growth:{ date:'2026-06-28', ndvi:0.68, note:'생육 균일, 병반 없음' },
+    vrt:{ date:'2026-07-05', mat:'맞춤형 21-17-17', avg:24.3, min:16, max:33, saving:12.4, state:'적용 대기' },
+    harvest:null },
+  'GJ-R5': { svc:'생육진단(드론)', state:'완료',
+    soil:{ date:'2026-04-05', avg:'양토', rows:[['pH (산도)','6.1','6.0~6.5','적정'],['유기물 (g/kg)','27','25~30','적정'],['유효인산 (mg/kg)','104','80~120','적정'],['칼륨 (cmol+/kg)','0.55','0.50~0.60','적정'],['유효규산 (mg/kg)','142','157↑','낮음']], note:'전반적으로 양호, 규산만 보충 권장' },
+    growth:{ date:'2026-06-28', ndvi:0.71, note:'전회(05.18) 대비 +0.09 개선 · 남서측 병반 의심 2개소(배수 불량 추정)' },
+    vrt:null, harvest:null },
+  'GJ-R8': { svc:'수확모니터링', state:'신청',
+    soil:null, growth:null, vrt:null, harvest:null, pending:true },
+  'GJ-R9': { svc:'토양진단', state:'완료',
+    soil:{ date:'2026-05-30', avg:'사양토', rows:[['pH (산도)','5.5','6.0~6.5','낮음'],['유기물 (g/kg)','19','25~30','낮음'],['유효인산 (mg/kg)','72','80~120','낮음'],['칼륨 (cmol+/kg)','0.48','0.50~0.60','낮음'],['유효규산 (mg/kg)','95','157↑','낮음']], note:'전반적 양분 부족 — 유기물·인산·규산 보충 및 석회 시용으로 산도 교정 필요' },
+    growth:null, vrt:null, harvest:null },
+};
+/* A-Motion 관제 상세 (JOB-104 / HX1400AI) */
+const AMOTION_DETAIL = {
+  worker:'김철수 (원격 감독)', impl:'로터리 WJ2000 (ISOBUS)', runTime:'01:38', fuel:72, load:74, rpm:1980,
+  events:[ {t:'14:22', type:'장애물 감지', act:'자동 정지·재개', x:0.42, y:0.55}, {t:'13:05', type:'가이드라인 이탈 8cm', act:'RTK 자동 보정', x:0.7, y:0.3} ],
+};
+
 /* ---------- 재무 ---------- */
 const FIN = {
   labor:[ {who:'김철수(본인)', role:'기계작업', h:86, cost:0}, {who:'외주 오퍼레이터 2명', role:'수확 보조', h:34, cost:1360000}, {who:'일용 인부 3명', role:'물꼬·예초', h:52, cost:1560000} ],
@@ -309,6 +345,7 @@ const LAYERS = [
   { id:'LY-07', name:'생육진단 맵 (NDVI)', group:'정밀농업', color:'#0E9F5A', icon:'leaf', refresh:'촬영 시', on:false, timeline:true },
   { id:'LY-08', name:'수확량 맵', group:'정밀농업', color:'#C7A008', icon:'chart', refresh:'수확 시', on:false, timeline:true },
   { id:'LY-09', name:'처방맵 (VRT)', group:'정밀농업', color:'#1F9E8B', icon:'doc', refresh:'처방 시', on:false, timeline:true },
+  { id:'LY-11', name:'AI 재해경보', group:'정밀농업', color:'#E5352C', icon:'sos', refresh:'조기경보', on:false },
   { id:'LY-10', name:'경작지 경계', group:'기준정보', color:'#CBD3DC', icon:'map', refresh:'수시', on:true },
 ];
 const LAYER_PRESETS = {
@@ -368,10 +405,11 @@ const OCR_EXTRACT = {
   ],
 };
 
-/* 5.3 임대 현황 — vehId → 임대 정보 */
+/* 5.3 임대 현황 — vehId → 임대 정보 (due: 만기일, D-day 계산 기준 오늘 2026-07-23) */
 const RENTALS = {
-  'VH-001': { state:'임대중', to:'안들농장 (개인)', mgr:'김철수', phone:'010-2211-8890', period:'2026.07.10 ~ 08.10' },
-  'VH-004': { state:'예약',   to:'김제 농협',       mgr:'박조합', phone:'010-1234-5678', period:'2026.10월 수확기 (3건)' },
+  'VH-001': { state:'임대중', to:'안들농장 (개인)', mgr:'김철수', phone:'010-2211-8890', period:'2026.07.10 ~ 08.10', due:'2026-08-10' },
+  'VH-004': { state:'예약',   to:'김제 농협',       mgr:'박조합', phone:'010-1234-5678', period:'2026.10월 수확기 (3건)', due:'2026-10-01' },
+  'VH-007': { state:'임대중', to:'한울영농조합 (B2B)', mgr:'최한울', phone:'010-7788-2050', period:'2026.06.26 ~ 07.26', due:'2026-07-26' },
 };
 
 /* 5.1.2 차량등록 — 3rd party 브랜드/기기 카탈로그 */

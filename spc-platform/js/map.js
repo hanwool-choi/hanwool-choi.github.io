@@ -52,7 +52,7 @@ const MapView = (() => {
       stop: 'vrt',
       playing:false, compare:false,
       view:{x:0,y:0,w:1200,h:800},
-      selField:null, selVeh:null, amotionFocus:false, amPaused:false,
+      selField:null, selVeh:null, amotionFocus:false, amPaused:false, amReturning:false,
       base:'sat', recPeriod:'season',
       vehProg:{ 'VH-001':0.42, 'VH-002':0.65 },
       vehDist:{}, movDist:0,
@@ -153,27 +153,62 @@ const MapView = (() => {
       rows.push(`<div class="ml-title" style="margin-top:4px">면적당 수확량</div>
         <div class="ml-grad" style="background:${grad}"></div><div class="ml-grad-lab"><span>낮음</span><span>중간</span><span>높음</span></div>`);
     }
+    if (s.layers['LY-11']){
+      rows.push(`<div class="ml-title" style="margin-top:4px">AI 재해경보</div>
+        <div class="ml-row"><i style="background:#0E9F5A"></i>정상</div><div class="ml-row"><i style="background:#DE9207"></i>주의</div><div class="ml-row"><i style="background:#E5352C"></i>경고</div>`);
+    }
     if(!rows.length) return '';
     return `<div class="map-legend"><div class="ml-title">범례</div>${rows.join('')}</div>`;
   }
 
   function renderAmotionStrip(){
     const j = JOBS.find(j=>j.id==='JOB-104'), v = EQUIP.find(e=>e.id==='VH-001');
-    const paused = state.amPaused;
-    return `<div class="amotion-strip">
+    const paused = state.amPaused, ret = state.amReturning;
+    const d = AMOTION_DETAIL;
+    const f = FIELDS.find(x=>x.id==='GJ-R3'), b=bboxOf(f.poly);
+    /* 경로 미니맵 (설정된 경로 이미지) */
+    const pts=serpentine(f,7);
+    const vb=`${b.x-6} ${b.y-6} ${b.w+12} ${b.h+12}`;
+    const stName = ret?'입구 복귀 중':paused?'일시정지':'자율작업 중';
+    const stChip = ret?'chip-blue':paused?'chip-amber':'chip-green';
+    return `<div class="amotion-strip" style="width:320px">
       <div class="as-head">${App.icon('bot')} A-Motion 관제 — ${v.nick}
         <button class="as-x" onclick="MapView.closeAmotion()" title="관제 팝업 닫기">${App.icon('x',14)}</button></div>
-      <div class="as-body">
-        <div class="as-stat"><span>작업</span><b>${j.name}</b></div>
-        <div class="as-stat"><span>상태</span><b>${paused?'<span class="chip chip-amber"><span class="cd" style="background:currentColor"></span>일시정지</span>':'<span class="chip chip-green"><span class="cd" style="background:currentColor"></span>자율작업 중</span>'}</b></div>
-        <div class="as-stat"><span>진행률</span><b id="amProg">${Math.round(state.vehProg['VH-001']*100)}%</b></div>
-        <div class="as-stat"><span>경심 깊이 / 작업 단수</span><b>${j.depth} / ${j.rows}단</b></div>
-        <div class="as-stat"><span>이상감지 이벤트</span><b style="color:var(--green)">0건</b></div>
-        <div class="as-stat"><span>계획 대비 경로 이탈</span><b>±4cm (RTK)</b></div>
-        <div class="as-actions">
-          <button class="btn btn-sm btn-ghost" style="flex:1" onclick="App.toast('제어권은 현장 모바일 단말에 있습니다 (App 전용)')">${App.icon('phone')} 제어권</button>
-          <button class="btn btn-sm ${paused?'btn-navy':'btn-primary'}" style="flex:1" onclick="MapView.toggleAmPause()">${App.icon(paused?'play':'pause')} ${paused?'작업 재개':'일시정지'}</button>
+      <div class="as-body" style="max-height:calc(100vh - 220px);overflow-y:auto">
+        <div class="as-stat"><span>상태</span><b><span class="chip ${stChip}"><span class="cd" style="background:currentColor"></span>${stName}</span></b></div>
+        <div class="as-stat"><span>작업 / 진행률</span><b>${j.type} · <span id="amProg">${Math.round(state.vehProg['VH-001']*100)}%</span></b></div>
+        <div class="as-stat"><span>작업자</span><b>${d.worker}</b></div>
+        <div class="as-stat"><span>작업기</span><b>${d.impl}</b></div>
+        <div class="as-stat"><span>운행 시간 / 연료 잔량</span><b>${d.runTime} · ${v.fuel}%</b></div>
+        <div class="as-stat"><span>부하율 / RPM</span><b>${d.load}% · ${fmt(d.rpm)}</b></div>
+        <div class="as-stat"><span>경심 / 단수 · 경로 이탈</span><b>${j.depth}·${j.rows}단 / ±4cm</b></div>
+        <!-- 설정된 경로 이미지 -->
+        <div style="margin:9px 0 4px"><div style="font-size:10.5px;font-weight:700;color:var(--ink-3);margin-bottom:4px">설정된 경로 (RTK)</div>
+          <div style="background:#2E4A33;border-radius:8px;overflow:hidden;position:relative">
+            <svg viewBox="${vb}" style="width:100%;height:78px;display:block">
+              <rect x="${b.x-6}" y="${b.y-6}" width="${b.w+12}" height="${b.h+12}" fill="#3E5B44"/>
+              <polygon points="${ptsStr(f.poly)}" fill="#4C7A4E" stroke="#D6FF3E" stroke-width="2"/>
+              <path d="M ${pts.map(p=>p.join(' ')).join(' L ')}" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 3" opacity=".9"/>
+              ${d.events.map(ev=>`<g transform="translate(${b.x+ev.x*b.w},${b.y+ev.y*b.h})"><path d="M0 -6 L5 4 L-5 4 Z" fill="#E5352C" stroke="#fff" stroke-width="1"/><text y="3.5" text-anchor="middle" font-size="6" font-weight="900" fill="#fff">!</text></g>`).join('')}
+              <circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="3.5" fill="#5BE49B" stroke="#fff" stroke-width="1"/>
+            </svg>
+            <span style="position:absolute;left:6px;bottom:4px;font-size:8.5px;color:#D6FF3E;font-weight:700">● 입구</span>
+          </div>
         </div>
+        <!-- 발생 이벤트 -->
+        <div style="margin-top:6px"><div style="display:flex;align-items:center;font-size:10.5px;font-weight:700;color:var(--ink-3);margin-bottom:4px">
+          발생 이벤트 <span style="margin-left:auto;color:var(--red)">${d.events.length}건</span></div>
+          ${d.events.map(ev=>`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid var(--line);font-size:11px">
+            <span class="mono" style="color:var(--ink-3);font-size:10px">${ev.t}</span>
+            <span class="chip chip-amber" style="font-size:9.5px">${ev.type}</span>
+            <span style="margin-left:auto;color:var(--ink-3);font-size:10px">${ev.act}</span></div>`).join('')}
+        </div>
+        <button class="btn btn-sm btn-ghost" style="width:100%;justify-content:center;margin-top:9px" onclick="App.toast('Snapshot 이미지 조회 (전방 카메라·작업기 뷰) — 데모')">${App.icon('photo',13)} Snapshot 확인</button>
+        <div class="as-actions" style="margin-top:9px">
+          <button class="btn btn-sm ${paused?'btn-navy':'btn-primary'}" style="flex:1" onclick="MapView.toggleAmPause()" ${ret?'disabled style="opacity:.5;flex:1"':''}>${App.icon(paused?'play':'pause')} ${paused?'재개':'일시정지'}</button>
+          <button class="btn btn-sm ${ret?'btn-navy':'btn-ghost'}" style="flex:1" onclick="MapView.amReturn()">${App.icon('route')} ${ret?'복귀 중':'복귀'}</button>
+        </div>
+        <button class="btn btn-sm btn-navy" style="width:100%;justify-content:center;margin-top:7px" onclick="App.go('equip',{veh:'VH-001'})">${App.icon('chev',13)} 상세보기 (장비 현황)</button>
       </div>
     </div>`;
   }
@@ -277,6 +312,7 @@ const MapView = (() => {
       <!-- managed fields -->
       ${FIELDS.map(f=>fieldSVG(f,sat)).join('')}
       <!-- layers -->
+      ${s.layers['LY-11']? hazardSVG() : ''}
       ${s.layers['LY-05']? routeSVG() : ''}
       ${s.layers['LY-02']? coverageSVG() : ''}
       ${s.layers['LY-03']? amotionSVG() : ''}
@@ -396,12 +432,44 @@ const MapView = (() => {
   }
 
   function amotionSVG(){
-    const f=FIELDS.find(x=>x.id==='GJ-R3'); const pts=serpentine(f,7);
+    const f=FIELDS.find(x=>x.id==='GJ-R3'); const pts=serpentine(f,7), b=bboxOf(f.poly);
     const d='M '+pts.map(p=>p.join(' ')).join(' L ');
+    /* 이벤트 발생 기록 마커 (느낌표 표지판) */
+    const markers=AMOTION_DETAIL.events.map(ev=>{
+      const x=b.x+ev.x*b.w, y=b.y+ev.y*b.h;
+      return `<g transform="translate(${x},${y})" style="cursor:pointer" class="am-event"><title>${ev.t} ${ev.type} — ${ev.act}</title>
+        <path d="M0 -14 L12 8 L-12 8 Z" fill="#E5352C" stroke="#fff" stroke-width="2" filter="url(#soft)"/>
+        <text y="6" text-anchor="middle" font-size="13" font-weight="900" fill="#fff" font-family="var(--font)">!</text></g>`;
+    }).join('');
     return `<g>
       <path class="route-line" d="${d}" stroke="#6E56CF" stroke-width="2" stroke-dasharray="5 4" opacity=".85"/>
       ${pts.filter((_,i)=>i%2===0).map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.2" fill="#6E56CF"/>`).join('')}
+      <circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="4" fill="#5BE49B" stroke="#fff" stroke-width="1.5"/>
+      ${markers}
     </g>`;
+  }
+
+  /* LY-11 AI 재해경보 — 경보 필지 강조 + 경보 배지 */
+  function hazardSVG(){
+    const op=state.opacity['LY-11']/100;
+    return FIELDS.filter(f=>f.hazard.level!=='정상').map(f=>{
+      const b=bboxOf(f.poly);
+      const col={'주의':'#DE9207','경고':'#E5352C'}[f.hazard.level];
+      const pulse=f.hazard.level==='경고';
+      return `<g pointer-events="none">
+        <polygon points="${ptsStr(f.poly)}" fill="${col}" opacity="${.22*op}"/>
+        <polygon points="${ptsStr(f.poly)}" fill="none" stroke="${col}" stroke-width="2.6" opacity="${op}"
+          ${pulse?'stroke-dasharray="8 5" style="animation:march 1s linear infinite"':''}/>
+        <g transform="translate(${b.x+b.w/2},${b.y+b.h/2})">
+          ${pulse?`<circle r="20" fill="${col}" opacity=".3"><animate attributeName="r" values="16;30;16" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values=".4;0;.4" dur="1.8s" repeatCount="indefinite"/></circle>`:''}
+          <path d="M0 -15 L14 12 L-14 12 Z" fill="${col}" stroke="#fff" stroke-width="1.6"/>
+          <text y="9" text-anchor="middle" font-size="15" font-weight="900" fill="#fff" font-family="var(--font)">!</text>
+        </g>
+        <g transform="translate(${b.x+b.w/2},${b.y+b.h/2+30})">
+          <rect x="-52" y="-9" width="104" height="18" rx="9" fill="${col}"/>
+          <text y="4" text-anchor="middle" font-size="9.5" font-weight="700" fill="#fff" font-family="var(--font)">${f.hazard.level} · ${f.hazard.type||''}</text></g>
+      </g>`;
+    }).join('');
   }
 
   function routeSVG(){
@@ -442,10 +510,15 @@ const MapView = (() => {
     raf=requestAnimationFrame(loop);
     if(!state||!host) return;
     if(ts-last<50) return; const dt=Math.min(0.2,(ts-last)/1000||0.05); last=ts;
-    /* progress working vehicles (A-Motion 일시정지 시 VH-001 정지) */
+    /* A-Motion 복귀: VH-001 진행률을 입구(0)로 되돌림 */
+    if(state.amReturning){
+      state.vehProg['VH-001']=Math.max(0,(state.vehProg['VH-001']??0.4)-dt*0.12);
+      if(state.vehProg['VH-001']<=0.001){ state.amReturning=false; state.amPaused=true; App.toast('HX1400AI 1호기가 경작지 입구로 복귀했습니다'); if(state.amotionFocus) render(); }
+    }
+    /* progress working vehicles (A-Motion 일시정지·복귀 시 VH-001 정지) */
     ['VH-001','VH-002'].forEach(id=>{
       if(!state.layers['LY-01']&&!state.layers['LY-02'])return;
-      if(id==='VH-001'&&state.amPaused)return;
+      if(id==='VH-001'&&(state.amPaused||state.amReturning))return;
       state.vehProg[id]=Math.min(0.995, (state.vehProg[id]??0.4)+dt*0.004);
     });
     state.movDist=state.movDist+dt*34;
@@ -595,9 +668,12 @@ const MapView = (() => {
     const f=FIELDS.find(x=>x.id===fid);
     const jobs=JOBS.filter(j=>j.field===fid);
     const run=jobs.find(j=>j.status==='run');
+    /* A-Motion 작업중 필지 선택 시 → 관제 팝업 열기 */
+    if(run && run.amotion){ state.layers['LY-03']=true; state.amotionFocus=true; render(); return; }
     const pop=host.querySelector('#mapPop');
     const stage=host.querySelector('#mapStage').getBoundingClientRect();
-    const x=Math.min(e.clientX-stage.left+14, stage.width-310), y=Math.min(e.clientY-stage.top-20, stage.height-260);
+    const x=Math.min(e.clientX-stage.left+14, stage.width-310), y=Math.min(e.clientY-stage.top-20, stage.height-280);
+    const [hc,hcolor]=({'정상':['chip-green','#0E9F5A'],'주의':['chip-amber','#DE9207'],'경고':['chip-red','#E5352C']})[f.hazard.level];
     pop.innerHTML=`<div class="map-pop" style="left:${Math.max(10,x)}px;top:${Math.max(10,y)}px">
       <div class="mp-head">
         <div class="lr-swatch" style="background:${f.tone};width:30px;height:30px;border-radius:9px">${App.icon('map',15)}</div>
@@ -608,39 +684,53 @@ const MapView = (() => {
         <div class="mp-row"><span>면적 / 작물</span><b>${fmt(f.area)}평 · ${f.crop}</b></div>
         <div class="mp-row"><span>농장 / 소유</span><b>${f.farm} · ${f.owner}</b></div>
         <div class="mp-row"><span>진행 작업</span><b>${run? run.name+' ('+Math.round((state.vehProg[run.veh]??run.prog/100)*100)+'%)' : '없음'}</b></div>
-        <div class="mp-row"><span>최근 진단</span><b>생육진단 06.28 · NDVI 0.71</b></div>
+        <div class="mp-row"><span>재해경보</span><b><span class="chip ${hc}">${f.hazard.level}${f.hazard.type?' · '+f.hazard.type:''}</span></b></div>
       </div>
+      ${f.hazard.level!=='정상'?`<div style="margin:0 15px 10px;padding:9px 11px;background:${hcolor}15;border-radius:9px;font-size:11px;color:var(--ink-2);line-height:1.5">${App.icon('sos',11)} ${f.hazard.eta} 예상 · ${f.hazard.action.split('②')[0].replace('①','').trim()}</div>`:''}
       <div class="mp-actions">
         <button class="btn btn-sm btn-ghost" onclick="App.go('farm',{tab:'plot'})">필지 상세</button>
-        <button class="btn btn-sm btn-primary" onclick="App.go('precision',{tab:'diag'})">진단·처방 이력</button>
+        <button class="btn btn-sm btn-primary" onclick="App.go('precision',{tab:'diag',field:'${fid}'})">진단·처방 이력</button>
       </div>
     </div>`;
   }
 
   function showVehPop(vid,e){
     const v=EQUIP.find(x=>x.id===vid);
+    /* A-Motion 작업중 차량 클릭 → 관제 팝업 */
+    if(v.amotion && v.status==='work'){ state.layers['LY-03']=true; state.amotionFocus=true; render(); return; }
     const [stName,stColor]=EQUIP_STATUS[v.status];
     const job=JOBS.find(j=>j.id===v.job);
     const pop=host.querySelector('#mapPop');
     const stage=host.querySelector('#mapStage').getBoundingClientRect();
-    const x=Math.min(e.clientX-stage.left+14, stage.width-310), y=Math.min(e.clientY-stage.top-20, stage.height-280);
+    const x=Math.min(e.clientX-stage.left+14, stage.width-310), y=Math.min(e.clientY-stage.top-20, stage.height-320);
+    /* 이동중/작업중 차량은 운영 상세(작업자·작업·작업기·연료·부하율·RPM·운행시간) */
+    const active = v.status==='move'||v.status==='work';
+    const load = v.status==='move'?38:68, rpm=v.status==='move'?1450:1920;
+    const impl = IMPLEMENTS.find(im=>im.linked===v.id);
     pop.innerHTML=`<div class="map-pop" style="left:${Math.max(10,x)}px;top:${Math.max(10,y)}px">
       <div class="mp-head">
-        <div class="lr-swatch" style="background:var(--navy);width:30px;height:30px;border-radius:9px">${App.icon('tractor',15)}</div>
+        <div class="lr-swatch" style="background:var(--navy);width:30px;height:30px;border-radius:9px">${App.icon(v.type==='콤바인'?'combine':v.type==='방제드론'?'drone':'tractor',15)}</div>
         <div><b>${v.nick}</b><small>${v.id} · TMU ${v.tmu}</small></div>
         <button class="mp-x" onclick="this.closest('.map-pop').remove()">${App.icon('x',14)}</button>
       </div>
       <div class="mp-body">
         <div class="mp-row"><span>상태</span><b><span class="chip chip-${stColor}"><span class="cd" style="background:currentColor"></span>${stName}</span></b></div>
-        <div class="mp-row"><span>연료 / DEF</span><b>${v.fuel??'-'}% · ${v.def??'-'}%</b></div>
-        <div class="mp-row"><span>금일 가동 / 누적</span><b>${v.todayH}h · ${fmt(v.hours)}h</b></div>
-        <div class="mp-row"><span>현재 작업</span><b>${job? job.name : '-'}</b></div>
+        ${active?`
+          <div class="mp-row"><span>작업자</span><b>${v.owner==='김철수'?'김철수':'배정 오퍼레이터'}</b></div>
+          <div class="mp-row"><span>작업 / 작업기</span><b>${job?job.type:(v.status==='move'?'필지 이동':'-')} · ${impl?impl.name.split(' ')[0]:'-'}</b></div>
+          <div class="mp-row"><span>연료 잔량</span><b>${v.fuel}%</b></div>
+          <div class="mp-row"><span>부하율 / RPM</span><b>${load}% · ${fmt(rpm)}</b></div>
+          <div class="mp-row"><span>금일 운행 시간</span><b>${v.todayH}h</b></div>
+        `:`
+          <div class="mp-row"><span>연료 / DEF</span><b>${v.fuel??'-'}% · ${v.def??'-'}%</b></div>
+          <div class="mp-row"><span>금일 가동 / 누적</span><b>${v.todayH}h · ${fmt(v.hours)}h</b></div>
+          <div class="mp-row"><span>현재 작업</span><b>${job? job.name : '-'}</b></div>
+        `}
         ${v.dtc?`<div class="mp-row"><span>DTC</span><b style="color:var(--red)">${v.dtcCode} 외 ${v.dtc-1>0?v.dtc-1+'건':'0건'}</b></div>`:''}
       </div>
       <div class="mp-actions">
         <button class="btn btn-sm btn-ghost" onclick="App.go('equip',{veh:'${v.id}'})">장비 상세</button>
-        ${v.amotion?`<button class="btn btn-sm btn-primary" onclick="MapView.enterAmotion()">관제 모드</button>`:
-          `<button class="btn btn-sm btn-primary" onclick="App.toast('트랙 리플레이 (프로토타입 데모)')">경로 재생</button>`}
+        <button class="btn btn-sm btn-primary" onclick="App.toast('트랙 리플레이 (프로토타입 데모)')">경로 재생</button>
       </div>
     </div>`;
   }
@@ -652,12 +742,19 @@ const MapView = (() => {
 
   function closeAmotion(){ state.amotionFocus=false; render(); }
   function toggleAmPause(){
+    if(state.amReturning) return;
     state.amPaused=!state.amPaused;
     App.toast(state.amPaused?'HX1400AI 1호기 원격 일시정지 — 차량이 정지했습니다':'자율작업을 재개했습니다');
     render();
   }
+  function amReturn(){
+    if(state.amReturning){ state.amReturning=false; render(); return; }
+    state.amReturning=true; state.amPaused=false;
+    App.toast('복귀 명령 전송 — HX1400AI 1호기가 경작지 입구로 이동합니다');
+    render();
+  }
   function setRecPeriod(p){ state.recPeriod=p; render(); }
 
-  return { init, destroy, focusField, enterAmotion, closeAmotion, toggleAmPause, setRecPeriod,
+  return { init, destroy, focusField, enterAmotion, closeAmotion, toggleAmPause, amReturn, setRecPeriod,
     applyPreset(p){ if(!state) return; init(host,p); } };
 })();

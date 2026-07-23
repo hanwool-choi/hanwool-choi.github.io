@@ -68,9 +68,10 @@ Views.material = {
 
 /* ============================================================ 8. 정밀농업 솔루션 */
 Views.precision = {
-  tab:'req',
+  tab:'req', paField:'GJ-R3',
   render(params){
     if(params&&params.tab) this.tab=params.tab;
+    if(params&&params.field){ this.paField=params.field; if(this.tab==='req') this.tab='diag'; }
     const T=this.tab;
     return `<div class="page-enter">
       <div class="page-head">
@@ -84,7 +85,20 @@ Views.precision = {
         ${[['req','서비스 신청','8.1'],['diag','진단정보','8.2'],['rx','처방정보','8.3'],['perf','이력/성과','8.4']]
           .map(([k,n,id])=>`<button class="tab ${T===k?'active':''}" onclick="App.go('precision',{tab:'${k}'})">${n}<span class="tc mono">${id}</span></button>`).join('')}
       </div>
+      ${(T==='diag'||T==='rx')?this.fieldPicker():''}
       ${this['tab_'+T]()}
+    </div>`;
+  },
+  /* 서비스 신청 필지와 싱크된 필지 선택 바 */
+  fieldPicker(){
+    const ids=PRECISION_REQ.map(r=>r.field);
+    return `<div class="filter-bar" style="margin-bottom:16px">
+      <span style="font-size:12px;font-weight:700;color:var(--ink-2)">필지 선택</span>
+      <div class="seg" style="flex-wrap:wrap">
+        ${ids.map(id=>{ const f=FIELDS.find(x=>x.id===id), req=PRECISION_REQ.find(r=>r.field===id);
+          return `<button class="${this.paField===id?'active':''}" onclick="Views.precision.paField='${id}';App.rerender()">${f.name} <span class="mono" style="font-size:9px;opacity:.7">${req.state}</span></button>`;}).join('')}
+      </div>
+      <span class="deep-note" style="margin-left:auto">${App.icon('link',12)} 서비스 신청(8.1) 필지와 진단·처방 데이터가 싱크됩니다</span>
     </div>`;
   },
   tab_req(){
@@ -103,46 +117,50 @@ Views.precision = {
           <td>${isAdmin?`<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();App.toast('접수 상태 변경 (데모)')">상태 변경</button>`:''}</td>
         </tr>`;}).join('')}</tbody>
     </table></div>
-    <h3 style="margin:20px 0 10px">등록필지 <span class="mono" style="font-size:10px;color:var(--ink-3)">8.1.2</span></h3>
+    <h3 style="margin:20px 0 10px">등록필지 <span class="mono" style="font-size:10px;color:var(--ink-3)">8.1.2</span> <small style="color:var(--ink-3);font-weight:600">— 클릭 시 해당 필지 진단정보로 이동</small></h3>
     <div class="grid cols-4">
-      ${FIELDS.slice(0,4).map(f=>`
-        <div class="card card-pad" style="cursor:pointer" onclick="App.go('precision',{tab:'diag'})">
+      ${PRECISION_REQ.map(r=>{ const f=FIELDS.find(x=>x.id===r.field); const pa=PA_FIELDS[r.field]||{};
+        const dCnt=[pa.soil,pa.growth,pa.harvest].filter(Boolean).length;
+        return `<div class="card card-pad" style="cursor:pointer" onclick="App.go('precision',{tab:'diag',field:'${f.id}'})">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <div class="lr-swatch" style="background:${f.tone};width:30px;height:30px;border-radius:9px">${App.icon('leaf',15)}</div>
-            <div><b style="font-size:13px">${f.name}</b><br><small class="mono" style="font-size:10px;color:var(--ink-3)">${f.id}</small></div></div>
-          <small style="font-size:11.5px;color:var(--ink-2)">${f.crop} · ${fmt(f.area)}평<br>진단 2회 · 처방 1회</small>
-        </div>`).join('')}
+            <div><b style="font-size:13px">${f.name}</b><br><small class="mono" style="font-size:10px;color:var(--ink-3)">${f.id}</small></div>
+            <span class="chip ${r.state==='완료'?'chip-green':r.state==='진행'?'chip-blue':'chip-amber'}" style="margin-left:auto">${r.state}</span></div>
+          <small style="font-size:11.5px;color:var(--ink-2)">${f.crop} · ${fmt(f.area)}평<br>${r.svc} · 진단 ${dCnt}종${pa.vrt?' · 처방 1회':''}</small>
+        </div>`;}).join('')}
     </div>`;
   },
   tab_diag(){
+    const fid=this.paField, f=FIELDS.find(x=>x.id===fid), pa=PA_FIELDS[fid]||{};
+    if(pa.pending) return `<div class="card card-pad"><div class="empty-state">${App.icon('leaf')}<b>${f.name} — 진단 대기</b><small>서비스 신청(${pa.svc})이 접수되어 진단 일정을 조율 중입니다. 진단 완료 후 데이터가 표시됩니다.</small></div></div>`;
     return `<div class="grid" style="grid-template-columns:1.05fr .95fr">
       <div class="card card-pad">
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
           <h3>토양진단 리포트 <span class="mono" style="font-size:10px;color:var(--ink-3)">8.2.1</span></h3>
-          <span class="chip chip-gray">안들 3 (GJ-R3)</span><span class="chip chip-gray mono">${SOIL_REPORT.date}</span>
-          <div style="margin-left:auto">${Views._mapBtn('토양 맵',{layers:['LY-06','LY-10'],focus:'GJ-R3',stop:'soil'})}</div>
+          <span class="chip chip-gray">${f.name} (${fid})</span>${pa.soil?`<span class="chip chip-gray mono">${pa.soil.date}</span>`:''}
+          <div style="margin-left:auto">${Views._mapBtn('토양 맵',{layers:['LY-06','LY-10'],focus:fid,stop:'soil'})}</div>
         </div>
-        <div class="tbl-wrap"><table class="tbl">
+        ${pa.soil?`<div class="tbl-wrap"><table class="tbl">
           <thead><tr><th>항목</th><th class="t-num">측정값</th><th class="t-num">적정범위</th><th>판정</th></tr></thead>
-          <tbody>${SOIL_REPORT.rows.map(([n,v,r,j])=>`
+          <tbody>${pa.soil.rows.map(([n,v,r,j])=>`
             <tr><td class="t-strong">${n}</td><td class="t-num">${v}</td><td class="t-num" style="color:var(--ink-3)">${r}</td>
             <td><span class="chip ${j==='적정'?'chip-green':j==='높음'?'chip-blue':'chip-amber'}">${j}</span></td></tr>`).join('')}</tbody>
         </table></div>
-        <div class="perm-note" style="margin-top:12px">${App.icon('bot')} <div><b>AI 소견</b> — pH·유기물·규산 보정 필요. 규산질 비료 250kg/10a 시용 후 심경 로터리를 권장합니다. → <a style="color:var(--red);font-weight:700;cursor:pointer" onclick="App.go('precision',{tab:'rx'})">처방맵 생성으로 이동</a></div></div>
+        <div class="perm-note" style="margin-top:12px">${App.icon('bot')} <div><b>AI 소견</b> — ${pa.soil.note}. ${pa.vrt?`→ <a style="color:var(--red);font-weight:700;cursor:pointer" onclick="App.go('precision',{tab:'rx',field:'${fid}'})">처방맵으로 이동</a>`:''}</div></div>`
+        :`<div class="empty-state" style="padding:30px">${App.icon('leaf')}<b>토양진단 미실시</b><small>이 필지는 ${pa.svc} 서비스로 신청되었습니다</small></div>`}
       </div>
       <div>
         <div class="card card-pad" style="margin-bottom:14px">
           <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
             <h3>생육진단 (NDVI) <span class="mono" style="font-size:10px;color:var(--ink-3)">8.2.2</span></h3>
-            <div style="margin-left:auto">${Views._mapBtn('생육 맵',{layers:['LY-07','LY-10'],focus:'GJ-R5',stop:'growth2'})}</div>
+            <div style="margin-left:auto">${pa.growth?Views._mapBtn('생육 맵',{layers:['LY-07','LY-10'],focus:fid,stop:'growth2'}):''}</div>
           </div>
-          <div style="display:flex;gap:16px;align-items:center">
-            <div id="ndviDonut">${Charts.donut(71,{label:'평균 NDVI',color:'#0E9F5A',size:96})}</div>
+          ${pa.growth?`<div style="display:flex;gap:16px;align-items:center">
+            <div id="ndviDonut">${Charts.donut(Math.round(pa.growth.ndvi*100),{label:'평균 NDVI',color:'#0E9F5A',size:96})}</div>
             <div style="flex:1;font-size:12.5px;color:var(--ink-2)">
-              드론 촬영 06.28 · 아랫배미(GJ-R5)<br><b style="color:var(--green)">전회(05.18) 대비 +0.09 개선</b><br>
-              병반 의심 구역 <b>2개소</b> — 남서측 배수 불량 추정
+              드론 촬영 ${pa.growth.date.slice(5).replace('-','.')} · ${f.name}<br>${pa.growth.note}
             </div>
-          </div>
+          </div>`:`<div class="empty-state" style="padding:24px">${App.icon('leaf')}<small>생육진단 데이터 없음</small></div>`}
         </div>
         <div class="card card-pad">
           <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
@@ -159,22 +177,26 @@ Views.precision = {
   },
   tab_rx(){
     const canSend=permOf('8.3',App.role.id)!=='-';
+    const fid=this.paField, f=FIELDS.find(x=>x.id===fid), pa=PA_FIELDS[fid]||{};
+    if(!pa.vrt) return `<div class="card card-pad"><div class="empty-state">${App.icon('doc')}<b>${f.name} — 처방 데이터 없음</b><small>이 필지는 아직 처방(VRT)이 생성되지 않았습니다. 진단정보에서 토양·생육 데이터를 확인한 뒤 처방을 생성하세요.</small>
+      <div style="margin-top:12px"><button class="btn btn-ghost" onclick="App.go('precision',{tab:'diag',field:'${fid}'})">진단정보 보기</button></div></div></div>`;
+    const v=pa.vrt;
     return `<div class="grid" style="grid-template-columns:1fr .9fr">
       <div class="card card-pad">
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
           <h3>시비처방 (VRT 처방맵) <span class="mono" style="font-size:10px;color:var(--ink-3)">8.3.1</span></h3>
-          <span class="chip chip-gray">안들 3 (GJ-R3)</span>
-          <div style="margin-left:auto">${Views._mapBtn('처방맵 보기',{layers:['LY-09','LY-10'],focus:'GJ-R3',stop:'vrt'})}</div>
+          <span class="chip chip-gray">${f.name} (${fid})</span><span class="chip ${v.state==='적용 대기'?'chip-amber':'chip-green'}">${v.state}</span>
+          <div style="margin-left:auto">${Views._mapBtn('처방맵 보기',{layers:['LY-09','LY-10'],focus:fid,stop:'vrt'})}</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;border-radius:12px;overflow:hidden;margin-bottom:12px">
-          ${ZONES['GJ-R3'].vrt.map(t=>{
-            const kg=(16+t*17).toFixed(0);
+          ${ZONES[fid].vrt.map(t=>{
+            const kg=(v.min+t*(v.max-v.min)).toFixed(0);
             const c=t<.33?'#CDEFEA':t<.66?'#3FB2A1':'#0F5E54';
             return `<div style="background:${c};aspect-ratio:2.4/1;display:grid;place-items:center;color:${t<.33?'#0F5E54':'#fff'};font-size:11px;font-weight:800">${kg}kg</div>`;}).join('')}
         </div>
         <div style="display:flex;gap:18px;font-size:12.5px;color:var(--ink-2);margin-bottom:12px">
-          <span>자재 <b>${VRT_PLAN.mat}</b></span><span>평균 <b>${VRT_PLAN.avg}kg/10a</b></span>
-          <span>범위 <b>${VRT_PLAN.min}~${VRT_PLAN.max}kg</b></span><span style="color:var(--green)">균일 살포 대비 <b>-${VRT_PLAN.saving}%</b></span>
+          <span>자재 <b>${v.mat}</b></span><span>평균 <b>${v.avg}kg/10a</b></span>
+          <span>범위 <b>${v.min}~${v.max}kg</b></span><span style="color:var(--green)">균일 살포 대비 <b>-${v.saving}%</b></span>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-primary" style="flex:1;justify-content:center" ${canSend?'':'disabled style="opacity:.5"'}
@@ -184,12 +206,12 @@ Views.precision = {
       </div>
       <div class="card card-pad">
         <h3 style="margin-bottom:10px">처방 근거 데이터 융합</h3>
-        ${[['토양진단 (04.02)','pH 5.8 · 유기물 23g/kg','LY-06','soil'],['생육진단 ① (05.18)','NDVI 평균 0.62','LY-07','growth1'],['생육진단 ② (06.28)','NDVI 평균 0.71','LY-07','growth2'],["'25 수확량 맵",'563kg/10a · 구역편차 18%','LY-08',null]]
+        ${[['토양진단',pa.soil?`${pa.soil.date.slice(5).replace('-','.')} · ${pa.soil.avg}`:'없음','LY-06','soil'],['생육진단',pa.growth?`${pa.growth.date.slice(5).replace('-','.')} · NDVI ${pa.growth.ndvi}`:'없음','LY-07','growth2'],["'25 수확량 맵",'563kg/10a · 구역편차 18%','LY-08',null]]
           .map(([t,s,ly,stop])=>`
           <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)">
             <div class="lr-swatch" style="background:${LAYERS.find(l=>l.id===ly).color};width:30px;height:30px;border-radius:9px">${App.icon('layers',14)}</div>
             <div style="flex:1"><b style="font-size:12.5px">${t}</b><br><small style="font-size:11px;color:var(--ink-3)">${s}</small></div>
-            ${stop?Views._mapBtn('맵',{layers:[ly,'LY-10'],focus:'GJ-R3',stop}):''}
+            ${stop?Views._mapBtn('맵',{layers:[ly,'LY-10'],focus:fid,stop}):''}
           </div>`).join('')}
         <div class="deep-note" style="margin-top:12px">${App.icon('map')} 시계열 비교는 통합 모니터링 타임라인(2.1.3)에서 — 진단→처방→수확을 한 화면에서 탐색</div>
       </div>

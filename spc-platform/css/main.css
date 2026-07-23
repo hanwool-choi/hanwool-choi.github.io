@@ -313,6 +313,19 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--su
 .ai-fab:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 12px 32px rgba(229,53,44,.5)}
 .ai-fab svg{width:26px;height:26px}
 .ai-fab .ai-ring{position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(229,53,44,.35);animation:pulse 2.4s infinite}
+/* AI 선제 알림 말풍선 */
+.ai-bubble{
+  position:fixed;right:26px;bottom:96px;width:328px;max-width:calc(100vw - 40px);z-index:122;
+  background:var(--surface);border:1px solid var(--line);border-radius:18px;border-bottom-right-radius:6px;
+  box-shadow:var(--shadow-lg);padding:15px 17px;animation:bubbleIn .4s var(--ease);
+}
+@keyframes bubbleIn{from{opacity:0;transform:translateY(16px) scale(.94)}to{opacity:1;transform:none}}
+.ai-bubble::after{content:'';position:absolute;right:22px;bottom:-8px;width:16px;height:16px;background:var(--surface);border-right:1px solid var(--line);border-bottom:1px solid var(--line);transform:rotate(45deg)}
+.ai-bubble .ai-bubble-x{position:absolute;right:11px;top:11px;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:var(--ink-3)}
+.ai-bubble .ai-bubble-x:hover{background:var(--surface-2);color:var(--ink)}
+.ai-bubble .ab-head{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800;margin-bottom:8px}
+.ai-bubble .ab-msg{font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+.ai-bubble .ab-act{display:flex;gap:7px;justify-content:flex-end;margin-top:12px}
 .ai-panel{
   position:fixed;right:26px;bottom:96px;width:400px;max-width:calc(100vw - 40px);height:min(600px,72vh);z-index:121;
   background:var(--surface);border-radius:20px;box-shadow:var(--shadow-lg);border:1px solid var(--line);

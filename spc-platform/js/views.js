@@ -5,10 +5,10 @@ const Views = {};
 
 /* ---------- shared bits ---------- */
 function jobChip(st){ const [t,c]=JOB_STATUS[st]; return `<span class="chip chip-${c}"><span class="cd" style="background:currentColor"></span>${t}</span>`; }
-/* 대분류(일반/대행) + 작업유형(10종) + A-Motion 뱃지 */
+/* 대분류(일반/대행) + 작업유형(10종). A-Motion은 작업유형이 아니라 자율작업 특성 → 작업 상세에서 표기 */
 function typeChip(j){
   if(typeof j==='string') return `<span class="chip chip-gray">${j}</span>`;
-  return `<span class="chip ${j.cat==='대행'?'chip-blue':'chip-gray'}">${j.cat}</span> <span class="chip ${WT_CHIP[j.type]||'chip-gray'}">${j.type}</span>${j.amotion?' <span class="chip chip-purple">A-Motion</span>':''}`;
+  return `<span class="chip ${j.cat==='대행'?'chip-blue':'chip-gray'}">${j.cat}</span> <span class="chip ${WT_CHIP[j.type]||'chip-gray'}">${j.type}</span>`;
 }
 function mapBtn(label, preset, small=true){
   return `<button class="btn ${small?'btn-sm':''} btn-map" onclick='App.go("map",${JSON.stringify(preset)})'>${App.icon('map',13)} ${label}</button>`;
@@ -55,18 +55,19 @@ Views.dashboard = {
       </div>
 
       <div class="card" style="margin-bottom:16px">
-        <div class="card-head"><h3>오늘의 농장</h3><span class="chip chip-gray mono" style="font-size:10px">1.1.1</span>
+        <div class="card-head"><h3>오늘의 작업</h3><span class="chip chip-gray mono" style="font-size:10px">1.1.1</span>
           <button class="more" onclick="App.go('work',{tab:'status'})">작업관리로 이동 →</button></div>
         <div class="card-pad" style="padding-top:12px">
           <div class="today-strip">
             ${todayJobs.map(j=>{ const f=FIELDS.find(x=>x.id===j.field);
-              return `<div class="today-card" onclick="App.go('work',{tab:'status'})">
+              return `<div class="today-card" onclick="App.go('work',{tab:'status',job:'${j.id}'})">
                 <div style="display:flex;align-items:center;gap:6px">${typeChip(j)}${jobChip(j.status)}</div>
                 <b>${j.name}</b><small>${f?f.name+' · ':''}${fmt(j.area)}평 · ${j.date}</small>
                 ${j.status==='run'?`<div class="prog" style="margin-top:9px"><i style="width:${j.prog}%"></i></div>`:''}
                 ${j.issue?`<small style="color:var(--red);font-weight:700;display:block;margin-top:6px">⚠ ${j.issue.split('—')[0]}</small>`:''}
               </div>`; }).join('')}
           </div>
+          ${this.briefing()}
         </div>
       </div>
 
@@ -102,6 +103,37 @@ Views.dashboard = {
         </div>
 
         ${this.orgCard()}
+      </div>
+    </div>`;
+  },
+  briefing(){
+    const warn=FIELDS.filter(f=>f.hazard&&f.hazard.level==='경고');
+    const dtc=EQUIP.filter(e=>e.dtc>0);
+    const todos=[
+      { ico:'bot', color:'purple', pri:'', t:'HX1400AI 1호기 안들 3 심경 로터리 자율작업 감독', sub:'현재 42% 진행 · 이상감지 0건 — 관제 모드에서 확인', act:()=>`App.go('map',{layers:['LY-03','LY-01','LY-02'],focus:'GJ-R3',amotion:true})` },
+      warn.length?{ ico:'sos', color:'red', pri:'긴급', t:`${warn[0].farm} 재해경보 — ${warn[0].hazard.type}`, sub:`${warn[0].hazard.eta} 예상 · 배수로 정비 및 방제 일정 조정 검토`, act:()=>`App.go('farm',{tab:'plot'})` }:null,
+      dtc.length?{ ico:'wrench', color:'amber', pri:'우선', t:`${dtc.map(e=>e.model).join(', ')} 고장 코드 확인`, sub:`DTC ${dtc[0].dtcCode} 발생 — 서비스 예약 권장`, act:()=>`App.go('equip')` }:null,
+      { ico:'won', color:'green', pri:'', t:'아랫배미 VRT 시비 처방 검토·전송', sub:'처방맵 생성 완료(-12.4% 절감) · 스마트 작업기 전송 대기', act:()=>`App.go('precision',{tab:'rx'})` },
+      { ico:'doc', color:'blue', pri:'', t:'춘계 대행 정산 3팀 확인 요청', sub:'14일 내 미확정 시 자동 확정 처리 — 1팀 보완 요청 있음', act:()=>`App.go('work',{tab:'agency',sub:'settle'})` },
+    ].filter(Boolean);
+    return `<div style="margin-top:16px;border-top:1px dashed var(--line);padding-top:14px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+        <div class="lr-swatch" style="background:linear-gradient(135deg,#E5352C,#C22A22);width:32px;height:32px;border-radius:10px">${App.icon('bot',16)}</div>
+        <div style="flex:1"><b style="font-size:14px">AI 브리핑</b> <span class="chip chip-red" style="font-size:9.5px">오늘 할 일 ${todos.length}</span>
+          <div style="font-size:11.5px;color:var(--ink-3)">${App.role.name}님, 오늘 우선 처리할 작업을 중요도 순으로 정리했습니다</div></div>
+        <button class="btn btn-sm btn-ghost" onclick="App.openAI('todo')">${App.icon('bot',13)} AI에게 브리핑 받기</button>
+      </div>
+      <div style="display:grid;gap:8px">
+        ${todos.map((b,i)=>`
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer;transition:all .15s var(--ease);background:${b.pri?'var(--'+b.color+'-soft)':'var(--surface)'}"
+            onmouseover="this.style.transform='translateX(3px)';this.style.boxShadow='var(--shadow-sm)'" onmouseout="this.style.transform='';this.style.boxShadow=''"
+            onclick="${b.act()}">
+            <div style="font-size:13px;font-weight:800;color:var(--ink-3);width:16px;text-align:center;font-variant-numeric:tabular-nums">${i+1}</div>
+            <div class="alert-ico" style="background:var(--${b.color}-soft);color:var(--${b.color});width:34px;height:34px;flex-shrink:0">${App.icon(b.ico,16)}</div>
+            <div style="flex:1;min-width:0"><b style="font-size:13px">${b.pri?`<span class="chip chip-${b.color==='red'?'red':b.color==='amber'?'amber':'gray'}" style="font-size:9.5px;margin-right:5px">${b.pri}</span>`:''}${b.t}</b>
+              <div style="font-size:11.5px;color:var(--ink-3);margin-top:1px">${b.sub}</div></div>
+            ${App.icon('chev',15)}
+          </div>`).join('')}
       </div>
     </div>`;
   },
@@ -232,29 +264,54 @@ Views.farm = {
     </div>`;
   },
   tab_plot(){
-    return `<div class="filter-bar">
+    const warn=FIELDS.filter(f=>f.hazard.level!=='정상');
+    return `${warn.length?`<div class="perm-note" style="background:var(--red-soft);border-color:#F6D3CE;color:#8A2A22">${App.icon('sos')} <div><b>재해경보 ${warn.length}건</b> — ${warn.map(f=>`${f.name}(${f.hazard.level})`).join(', ')}. 국립농업과학원 농업기상재해 조기경보서비스 연계. <a style="color:var(--red);font-weight:700;cursor:pointer" onclick='App.go("map",{layers:["LY-11","LY-10"]})'>통합 맵에서 보기 →</a></div></div>`:''}
+    <div class="filter-bar">
       <div class="f-search">${App.icon('search')}<input placeholder="필지명·ID·주소 검색"></div>
       <select class="f-select"><option>작물 전체</option><option>벼</option><option>콩</option><option>밀</option><option>사과</option></select>
+      <select class="f-select"><option>재해경보 전체</option><option>정상</option><option>주의</option><option>경고</option></select>
       <div style="margin-left:auto">${mapBtn('전체 필지 맵에서 보기',{layers:['LY-10']})}</div>
     </div>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>필지</th><th>주소</th><th class="t-num">면적(평)</th><th>작물</th><th>농장/소유</th><th>최근 진단</th><th>경계</th><th></th></tr></thead>
-      <tbody>${FIELDS.map(f=>`
-        <tr onclick="Views.farm.plotDrawer('${f.id}')">
+      <thead><tr><th>필지</th><th>주소</th><th class="t-num">면적(평)</th><th>작물</th><th>재해경보</th><th>농장/소유</th><th>경계</th><th></th></tr></thead>
+      <tbody>${FIELDS.map(f=>{ const [hc]=HAZARD_META[f.hazard.level];
+        return `<tr onclick="Views.farm.plotDrawer('${f.id}')">
           <td><span class="t-strong">${f.name}</span><span class="t-sub mono">${f.id}</span></td>
           <td style="font-size:12.5px">${f.addr}</td><td class="t-num t-strong">${fmt(f.area)}</td>
-          <td>${f.crop}</td><td style="font-size:12.5px">${f.farm} · ${f.owner}</td>
-          <td><span class="chip chip-green">생육 06.28</span></td>
+          <td>${f.crop}</td>
+          <td><span class="chip ${hc}"><span class="cd" style="background:currentColor"></span>${f.hazard.level}</span>${f.hazard.type?`<span class="t-sub">${f.hazard.type}</span>`:''}</td>
+          <td style="font-size:12.5px">${f.farm} · ${f.owner}</td>
           <td><span class="chip chip-blue">등록됨</span></td>
-          <td><button class="btn btn-sm btn-map" onclick='event.stopPropagation();App.go("map",{focus:"${f.id}",layers:["LY-10","LY-01","LY-02"]})'>${App.icon('map',13)} 맵</button></td>
-        </tr>`).join('')}</tbody>
+          <td><button class="btn btn-sm btn-map" onclick='event.stopPropagation();App.go("map",{focus:"${f.id}",layers:["LY-11","LY-10","LY-01"]})'>${App.icon('map',13)} 맵</button></td>
+        </tr>`;}).join('')}</tbody>
     </table></div>`;
   },
   plotDrawer(fid){
     const f=FIELDS.find(x=>x.id===fid);
+    const h=f.hazard, [hc,hcolor]=HAZARD_META[h.level];
     App.drawer(`필지 상세 — ${f.name}`, `
       <div style="display:flex;gap:8px;margin-bottom:16px">
-        <span class="chip chip-gray mono">${f.id}</span><span class="chip chip-green">${f.crop}</span><span class="chip chip-blue">경계 등록</span>
+        <span class="chip chip-gray mono">${f.id}</span><span class="chip chip-green">${f.crop}</span>
+        <span class="chip ${hc}"><span class="cd" style="background:currentColor"></span>재해경보 ${h.level}</span>
+      </div>
+      <div style="border:1.5px solid ${h.level==='정상'?'var(--line)':hcolor};border-radius:14px;overflow:hidden;margin-bottom:16px">
+        <div style="background:${h.level==='정상'?'var(--surface-2)':hcolor};color:${h.level==='정상'?'var(--ink)':'#fff'};padding:11px 15px;display:flex;align-items:center;gap:9px">
+          ${App.icon('sos',16)}<b style="font-size:13.5px;flex:1">재해경보 — ${h.level}${h.type?' · '+h.type:''}</b>
+          ${h.prob?`<span style="font-size:11px;font-weight:700;opacity:.9">발생확률 ${h.prob}%</span>`:''}
+        </div>
+        <div style="padding:13px 15px">
+          ${h.level==='정상'
+            ? `<div style="font-size:12.5px;color:var(--ink-2)">현재 기상재해 위험이 낮습니다. 국립농업과학원 농업기상재해 조기경보서비스로 실시간 모니터링 중입니다.</div>`
+            : `<div style="display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin-bottom:9px">
+                 <span>예상 시점 <b style="color:var(--ink)">${h.eta}</b></span>
+               </div>
+               <div style="font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-bottom:11px">${h.detail}</div>
+               <div style="background:var(--surface-2);border-radius:10px;padding:11px 13px">
+                 <b style="font-size:11.5px;color:${hcolor};display:block;margin-bottom:5px">${App.icon('check',11)} 대응 방침</b>
+                 <div style="font-size:12px;color:var(--ink-2);line-height:1.7">${h.action}</div>
+               </div>`}
+          <div style="font-size:10.5px;color:var(--ink-3);margin-top:9px">출처: 국립농업과학원 농업기상재해정보시스템 · 필지 맞춤 조기경보</div>
+        </div>
       </div>
       <div class="grid cols-3" style="margin-bottom:16px">
         <div class="card card-pad" style="padding:12px"><div class="k-label">면적</div><b style="font-size:17px">${fmt(f.area)}평</b></div>
@@ -265,8 +322,8 @@ Views.farm = {
       ${[['토양유형','미사질양토 (양토성)'],['작물력','벼-벼-콩 (3개년)'],['비료력','규산 118mg/kg · 유기물 23g/kg'],['수리','수리안전답 · 관정 1']].map(([k,v])=>`
         <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--ink-3)">${k}</span><b>${v}</b></div>`).join('')}
       <div style="display:flex;gap:8px;margin-top:16px">
-        ${mapBtn('맵에서 보기',{focus:fid,layers:['LY-10','LY-02']},false)}
-        <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="App.go('precision',{tab:'diag'})">진단·처방 이력</button>
+        ${mapBtn('맵에서 보기',{focus:fid,layers:['LY-11','LY-10','LY-02']},false)}
+        <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="App.go('precision',{tab:'diag',field:'${fid}'})">진단·처방 이력</button>
       </div>
     `);
   },

@@ -68,7 +68,45 @@ const App = {
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); this.toggleCmdk(true); }
       if(e.key==='Escape'){ this.toggleCmdk(false); this.closeDrawer(); this.closeModal(); }
     });
+    /* 접속 시 일정 확률로 AI Agent 선제 알림 말풍선 1개 표출 */
+    setTimeout(()=>this.maybeProactive(), 2200);
   },
+
+  /* 선제 알림 (AI Agent) — 접속 시 확률적 1건 */
+  PROACTIVE:[
+    { badge:'경고', color:'red', icon:'sos',
+      msg:'⚠️ <b>농장 3곳에 재해경보</b>가 발생했습니다.<br>약 4일 후, <b>콩(조생종)</b> 작물에 <b>습해(지발성)</b>가 예상됩니다. 배수로 정비와 방제 일정 조정을 검토하세요.',
+      link:{label:'재해경보 필지 보기', act:()=>App.go('map',{layers:['LY-11','LY-10']})} },
+    { badge:'정비', color:'amber', icon:'wrench',
+      msg:'보유중인 <b>GX7510, DK6020</b> 트랙터에 고장 코드가 발생했습니다. 지금 확인해보세요.',
+      link:{label:'장비 현황 열기', act:()=>App.go('equip',{tab:'status'})} },
+    { badge:'임대', color:'blue', icon:'route',
+      msg:'<b>한울영농조합</b>에 임대중인 <b>DJI 드론(T50)</b>의 임대 만기일이 <b>3일</b> 남았습니다.',
+      link:{label:'임대/배차 관리', act:()=>App.go('equip',{tab:'rent'})} },
+  ],
+  maybeProactive(){
+    if(this.aiOpen) return;
+    if(Math.random() > 0.72) return;              // 약 72% 확률로 1건 발생
+    const idx = Math.floor((performance.now()/7) % this.PROACTIVE.length);
+    this.proactiveShow(this.PROACTIVE[idx]);
+  },
+  proactiveShow(p){
+    const fab=document.getElementById('aiFab');
+    fab.insertAdjacentHTML('afterend', `
+      <div class="ai-bubble" id="aiBubble">
+        <button class="ai-bubble-x" onclick="document.getElementById('aiBubble').remove()">${this.icon('x',13)}</button>
+        <div class="ab-head"><span class="chip chip-${p.color}" style="font-size:9.5px">${p.badge}</span><b>AI 대동이</b> <span style="font-size:10px;color:var(--ink-3)">선제 알림</span></div>
+        <div class="ab-msg">${p.msg}</div>
+        <div class="ab-act">
+          <button class="btn btn-sm btn-ghost" onclick="document.getElementById('aiBubble').remove()">나중에</button>
+          <button class="btn btn-sm btn-primary" onclick="App._proactiveGo()">${p.link.label}</button>
+        </div>
+      </div>`);
+    this._proactiveAct=p.link.act;
+    // fab에 알림 뱃지
+    fab.querySelector('.ai-ring').style.borderColor='rgba(229,53,44,.7)';
+  },
+  _proactiveGo(){ const el=document.getElementById('aiBubble'); if(el) el.remove(); if(this._proactiveAct) this._proactiveAct(); },
 
   renderShell(){
     document.getElementById('app').innerHTML=`
