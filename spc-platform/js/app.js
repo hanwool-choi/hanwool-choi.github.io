@@ -95,7 +95,7 @@ const App = {
     fab.insertAdjacentHTML('afterend', `
       <div class="ai-bubble" id="aiBubble">
         <button class="ai-bubble-x" onclick="document.getElementById('aiBubble').remove()">${this.icon('x',13)}</button>
-        <div class="ab-head"><span class="chip chip-${p.color}" style="font-size:9.5px">${p.badge}</span><b>AI 대동이</b> <span style="font-size:10px;color:var(--ink-3)">선제 알림</span></div>
+        <div class="ab-head"><span class="chip chip-${p.color}" style="font-size:9.5px">${p.badge}</span><b>농업 AI Agent</b> <span style="font-size:10px;color:var(--ink-3)">선제 알림</span></div>
         <div class="ab-msg">${p.msg}</div>
         <div class="ab-act">
           <button class="btn btn-sm btn-ghost" onclick="document.getElementById('aiBubble').remove()">나중에</button>
@@ -157,7 +157,7 @@ const App = {
     <div class="ai-panel" id="aiPanel">
       <div class="ai-head">
         <div class="ai-avatar">${this.icon('bot',19)}</div>
-        <div style="flex:1"><b>AI 대동이</b><small><i></i>온라인 · 전 화면 플로팅 (IA 3)</small></div>
+        <div style="flex:1"><b>농업 AI Agent</b><small><i></i>온라인 · 전 화면 플로팅 (IA 3)</small></div>
         <button class="drawer-x" style="color:#A6B1BF" onclick="App.toggleAI(false)">${this.icon('x',16)}</button>
       </div>
       <div class="ai-body" id="aiBody"></div>
@@ -365,7 +365,7 @@ const App = {
   aiBoot(){
     const body=document.getElementById('aiBody');
     body.innerHTML='';
-    this.aiBot(`안녕하세요, ${this.role.name}님. <b>AI 대동이</b>입니다.<br>차량·작업 조회, 통계 질의, 영농 컨설팅, 매뉴얼 검색을 도와드려요.`);
+    this.aiBot(`안녕하세요, ${this.role.name}님. <b>농업 AI Agent</b>입니다.<br>차량·작업 조회, 통계 질의, 영농 컨설팅, 매뉴얼 검색을 도와드려요.`);
     setTimeout(()=>{
       body.insertAdjacentHTML('beforeend',`
         <div class="ins-card"><div class="ic-ico" style="background:var(--amber-soft);color:var(--amber)">${this.icon('rain',15)}</div>
