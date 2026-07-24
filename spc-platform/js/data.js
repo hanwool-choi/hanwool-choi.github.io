@@ -185,6 +185,22 @@ function stateTemplateFor(type){
 }
 function cloneStates(states){ return states.map(s=>({ id:s.id, name:s.name, color:s.color, next:[...(s.next||[])] })); }
 
+/* ---------- A-Motion 자율작업 경로 패턴 (작업 경로 설정) ---------- */
+const AM_PATTERNS = [
+  { id:'serpentine', name:'A–B Serpentine', desc:'A–B 기준선 기반 평행 주행 + 헤드랜드 U턴',
+    icon:'<svg viewBox="0 0 64 34"><rect x="7" y="8" width="50" height="18" rx="3" fill="none" stroke="#1F2937" stroke-width="1.7"/><path d="M15 14 H45 V20" fill="none" stroke="#1F2937" stroke-width="1.7"/></svg>' },
+  { id:'straight', name:'Straight Pass', desc:'단일 직선 주행, 작업자 지정 방위',
+    icon:'<svg viewBox="0 0 64 34"><line x1="14" y1="17" x2="50" y2="17" stroke="#1F2937" stroke-width="2.4"/></svg>' },
+  { id:'headland', name:'Headland / Boundary', desc:'작업 구역을 두르는 외곽 주행',
+    icon:'<svg viewBox="0 0 64 34"><rect x="14" y="9" width="36" height="16" rx="2" fill="none" stroke="#1F2937" stroke-width="1.9"/></svg>' },
+  { id:'cturn', name:'C-Turn', desc:'긴 작업기·좁은 이랑용 넓은 루프 턴',
+    icon:'<svg viewBox="0 0 64 34"><path d="M20 25 A16 13 0 0 1 44 25" fill="none" stroke="#1F2937" stroke-width="1.9"/></svg>' },
+  { id:'xturn', name:'X-Turn', desc:'건너뛰기를 최소화하는 크로스오버 턴',
+    icon:'<svg viewBox="0 0 64 34"><path d="M22 11 L42 23 M42 11 L22 23" stroke="#1F2937" stroke-width="1.9" fill="none" stroke-linecap="round"/></svg>' },
+  { id:'bed', name:'Bed / Ridge', desc:'융기 이랑 주행; 작업 구간 역주행 차단',
+    icon:'<svg viewBox="0 0 64 34"><line x1="18" y1="12" x2="46" y2="12"/><line x1="18" y1="17" x2="46" y2="17"/><line x1="18" y1="22" x2="46" y2="22"/><style>svg line{stroke:#1F2937;stroke-width:1.9}</style></svg>' },
+];
+
 /* ---------- 농작업 대행 (Figma '관리자 web 대행단 매칭 26.06.22' 기반, 농가→필지 흐름) ---------- */
 const CONTRACT = {
   id:'CT-2026-031', title:'2026년 봄 논 통합 대행 공고', period:'모집 2026.03.01 ~ 2026.05.31',

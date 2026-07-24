@@ -910,8 +910,8 @@ Views.work = {
         return `<div class="kan-col">
           <div class="kc-head"><span class="chip chip-${c}">${t}</span><span class="kc-n">${items.length}</span></div>
           ${items.map(j=>{const f=FIELDS.find(x=>x.id===j.field);
-            return `<div class="kan-card" onclick="Views.work.jobDrawer('${j.id}')">
-              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${typeChip(j)}${j.states&&j.state?jobStateChip(j):''}</div>
+            return `<div class="kan-card" style="${j.amotion?'border-color:var(--purple);box-shadow:0 0 0 2px var(--purple-soft)':''}" onclick="Views.work.jobDrawer('${j.id}')">
+              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${typeChip(j)}${j.amotion?'<span class="chip chip-purple" style="font-size:9.5px">A-Motion</span>':''}${j.states&&j.state?jobStateChip(j):''}</div>
               <b>${j.name}</b>
               <div class="kk-meta"><span>${f?f.name:''}</span><span>${fmt(j.area)}평</span><span class="mono">${j.date}</span></div>
               ${j.status==='run'?`<div class="kk-foot"><div class="prog" style="flex:1"><i style="width:${j.prog}%"></i></div><b style="font-size:11px">${j.prog}%</b></div>`:''}
@@ -922,8 +922,8 @@ Views.work = {
     : `<div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>작업</th><th>유형</th><th>필지</th><th class="t-num">면적(평)</th><th>장비</th><th>진행</th><th>상태</th><th></th></tr></thead>
       <tbody>${JOBS.map(j=>{const f=FIELDS.find(x=>x.id===j.field), v=EQUIP.find(e=>e.id===j.veh);
-        return `<tr onclick="Views.work.jobDrawer('${j.id}')">
-          <td><span class="t-strong">${j.name}</span><span class="t-sub mono">${j.id} · ${j.date}</span></td>
+        return `<tr style="${j.amotion?'box-shadow:inset 3px 0 0 var(--purple)':''}" onclick="Views.work.jobDrawer('${j.id}')">
+          <td><span class="t-strong">${j.name}</span><span class="t-sub mono">${j.id} · ${j.date}</span>${j.amotion?' <span class="chip chip-purple" style="font-size:9px">A-Motion</span>':''}</td>
           <td>${typeChip(j)}</td><td>${f?f.name:'-'}</td><td class="t-num">${fmt(j.area)}</td>
           <td style="font-size:12.5px">${v?v.model:'-'}</td>
           <td><div style="display:flex;align-items:center;gap:7px"><div class="prog ${j.status==='issue'?'red':''}" style="width:70px"><i style="width:${j.prog}%"></i></div><span style="font-size:11.5px;font-variant-numeric:tabular-nums">${j.prog}%</span></div></td>
@@ -1310,6 +1310,132 @@ Views.work = {
       <defs><marker id="sfArrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0 L7 3 L0 6 Z" fill="#9AA3AF"/></marker></defs>
       ${edges}${nodes}</svg>`;
   },
+
+  /* ===== A-Motion 작업 경로 설정 + 작업 상세설정 마법사 ===== */
+  _amConfig:null, _wizStep:1,
+  amDefaults(){ return { pattern:'serpentine', field:'', base:'sat', gear:4, spacing:10, depthAuto:true, depthSens:60, lift:50, descent:40, traction:true, level:true, repeat:false }; },
+  /* planModal A-Motion 박스 안에 표시되는 요약 + [작업 경로 설정] 버튼 */
+  amSummaryHTML(){
+    if(!this._amConfig) this._amConfig=this.amDefaults();
+    const c=this._amConfig, pat=AM_PATTERNS.find(p=>p.id===c.pattern)||AM_PATTERNS[0];
+    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm btn-navy" onclick="Views.work.openRouteWizard()">${App.icon('route',13)} 작업 경로 설정</button>
+      <span class="chip chip-purple">${pat.name}</span>
+      <span style="font-size:11px;color:var(--ink-2)">기어 ${c.gear} · 경로간격 ${c.spacing}cm · 심도 ${c.depthAuto?'자동':'수동'} · 리프트 ${c.lift}%</span>
+    </div>`;
+  },
+  openRouteWizard(){
+    const v=id=>{const el=document.getElementById(id);return el?el.value:'';};
+    this._planDraft={ date:v('plDate'), cat:this._plCat, type:v('plType'), field:v('plField'), worker:v('plWorker'), veh:v('plVeh'), impl:v('plImpl') };
+    if(!this._amConfig) this._amConfig=this.amDefaults();
+    this._amConfig.field=v('plField');
+    this._wizStep=1;
+    App.modal(`작업 경로 설정`, `<div id="wizBody"></div>`);
+    this.renderWizard();
+  },
+  renderWizard(){ const box=document.getElementById('wizBody'); if(!box) return;
+    box.innerHTML = this._wizStep===1 ? this.wizPatternHTML() : this.wizSettingsHTML(); },
+  selectPattern(id){ this._amConfig.pattern=id; this.renderWizard(); },
+  setPreviewBase(b){ this._amConfig.base=b; this.renderWizard(); },
+  wizNext(){ this._wizStep=2; this.renderWizard(); },
+  wizBack(){ this._wizStep=1; this.renderWizard(); },
+  wizToggle(k){ this._amConfig[k]=!this._amConfig[k]; this.renderWizard(); },
+  wizGear(d){ this._amConfig.gear=Math.max(1,Math.min(8,this._amConfig.gear+d)); const el=document.getElementById('wiz_gear'); if(el) el.textContent=this._amConfig.gear; },
+  wizSave(){ App.closeModal(); App.toast('A-Motion 작업 경로·상세설정이 저장되었습니다'); this.reopenPlan(); },
+  wizCancel(){ App.closeModal(); this.reopenPlan(); },
+  wizPatternHTML(){
+    const c=this._amConfig, f=FIELDS.find(x=>x.id===c.field)||FIELDS[0], pat=AM_PATTERNS.find(p=>p.id===c.pattern);
+    return `<div style="padding:20px 24px;max-height:66vh;overflow-y:auto">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+        ${AM_PATTERNS.map(p=>`<div onclick="Views.work.selectPattern('${p.id}')" style="border:1.5px solid ${c.pattern===p.id?'var(--red)':'var(--line)'};background:${c.pattern===p.id?'var(--red-soft)':'var(--surface)'};border-radius:12px;padding:12px;cursor:pointer;transition:all .15s">
+          <div style="height:50px;background:var(--surface-2);border-radius:8px;display:grid;place-items:center;margin-bottom:8px;color:#1F2937"><div style="width:64px;height:34px">${p.icon}</div></div>
+          <b style="font-size:12.5px">${p.name}</b>
+          <p style="font-size:10.5px;color:var(--ink-3);margin-top:3px;line-height:1.4">${p.desc}</p>
+        </div>`).join('')}
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:8px">Preview — ${f.name} <span style="color:var(--ink-3);font-weight:600">${pat.name}</span></div>
+        <div style="position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line)">
+          <div style="position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;background:#fff;border-radius:8px;box-shadow:var(--shadow-sm);overflow:hidden">
+            <button onclick="Views.work.setPreviewBase('map')" style="padding:5px 12px;font-size:11px;font-weight:700;${c.base==='map'?'background:var(--navy);color:#fff':'color:var(--ink-2)'}">Map</button>
+            <button onclick="Views.work.setPreviewBase('sat')" style="padding:5px 12px;font-size:11px;font-weight:700;${c.base!=='map'?'background:var(--navy);color:#fff':'color:var(--ink-2)'}">Satellite</button>
+          </div>
+          ${this.routePreviewSVG(c.field, c.pattern, c.base)}
+        </div>
+      </div>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="Views.work.wizCancel()">취소</button>
+      <button class="btn btn-primary" onclick="Views.work.wizNext()">계속 →</button>
+    </div>`;
+  },
+  wizSettingsHTML(){
+    const c=this._amConfig;
+    const tog=(key,label,sub)=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0">
+      <div style="flex:1;min-width:0"><b style="font-size:12.5px">${label}</b><div style="font-size:10.5px;color:var(--ink-3)">${sub}</div></div>
+      <div onclick="Views.work.wizToggle('${key}')" style="width:42px;height:23px;border-radius:12px;background:${c[key]?'var(--green)':'#D5DAE0'};position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">
+        <span style="position:absolute;top:2px;left:${c[key]?'21px':'2px'};width:19px;height:19px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)"></span></div></div>`;
+    const sld=(key,label,sub,min,max,unit)=>`<div style="padding:5px 0">
+      <div style="display:flex;align-items:baseline;gap:8px"><b style="font-size:12.5px;flex:1">${label}</b><b id="wiz_${key}" style="font-size:12.5px">${c[key]}${unit}</b></div>
+      <div style="font-size:10.5px;color:var(--ink-3);margin-bottom:5px">${sub}</div>
+      <input type="range" min="${min}" max="${max}" value="${c[key]}" oninput="Views.work._amConfig.${key}=+this.value;document.getElementById('wiz_${key}').textContent=this.value+'${unit}'" style="width:100%;accent-color:var(--red)"></div>`;
+    return `<div style="padding:20px 24px;max-height:64vh;overflow-y:auto">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 28px">
+        <div style="padding:5px 0"><div style="display:flex;align-items:center"><div style="flex:1"><b style="font-size:12.5px">기어 (주변속기)</b><div style="font-size:10.5px;color:var(--ink-3)">1~8</div></div>
+          <div style="display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:9px;padding:3px 6px">
+            <button onclick="Views.work.wizGear(-1)" style="width:22px;height:22px;font-size:16px;color:var(--ink-2)">−</button>
+            <b id="wiz_gear" style="width:18px;text-align:center">${c.gear}</b>
+            <button onclick="Views.work.wizGear(1)" style="width:22px;height:22px;font-size:15px;color:var(--ink-2)">+</button></div></div></div>
+        ${sld('lift','리프트 위치','0~100%',0,100,'%')}
+        ${sld('spacing','경로 간격','겹침/건너뛰기, cm',0,60,'cm')}
+        ${sld('descent','하강 속도','0~100%',0,100,'%')}
+        ${tog('depthAuto','작업 심도 — 자동','센서로 제어되는 깊이')}
+        ${tog('traction','트랙션 컨트롤 - 자동','조안 감지')}
+        ${sld('depthSens','깊이 감도','응답률 0~100%',0,100,'%')}
+        ${tog('level','레벨 — 자동','좌/우 수평 조절')}
+        <div></div>
+        ${tog('repeat','반복 작업','단계별 설정으로 다시 실행')}
+      </div>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;justify-content:space-between">
+      <button class="btn btn-ghost" onclick="Views.work.wizBack()">← 뒤로</button>
+      <button class="btn btn-primary" onclick="Views.work.wizSave()">${App.icon('check')} 저장</button>
+    </div>`;
+  },
+  /* 선택 필지 내 경로 패턴 예상 루트 미리보기 (SVG — 통합맵 스타일 재사용) */
+  routePreviewSVG(fieldId, pattern, base){
+    const f=FIELDS.find(x=>x.id===fieldId)||FIELDS[0], poly=f.poly;
+    const xs=poly.map(p=>p[0]), ys=poly.map(p=>p[1]);
+    const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+    const w=maxx-minx,h=maxy-miny,pad=Math.max(w,h)*0.14;
+    const vb=`${minx-pad} ${miny-pad} ${w+pad*2} ${h+pad*2}`;
+    const cid='rp'+fieldId.replace(/[^A-Za-z0-9]/g,'');
+    const sat=base!=='map';
+    const cx=xs.reduce((a,b)=>a+b,0)/xs.length, cy=ys.reduce((a,b)=>a+b,0)/ys.length;
+    const ptsStr=pl=>pl.map(p=>p.join(',')).join(' ');
+    const aV=poly.reduce((m,p)=>(p[0]+p[1]<m[0]+m[1]?p:m),poly[0]);
+    const bV=poly.reduce((m,p)=>(p[0]+p[1]>m[0]+m[1]?p:m),poly[0]);
+    const sw=Math.max(1.4,w*0.011), stroke='#2E6BE6';
+    let routes='';
+    if(pattern==='straight'){
+      routes=`<line x1="${minx}" y1="${cy}" x2="${maxx}" y2="${cy}" stroke="${stroke}" stroke-width="${sw*1.4}"/>`;
+    } else if(pattern==='headland'){
+      [0.82,0.62,0.42,0.24].forEach(k=>{ routes+=`<polygon points="${ptsStr(poly.map(p=>[cx+(p[0]-cx)*k, cy+(p[1]-cy)*k]))}" fill="none" stroke="${stroke}" stroke-width="${sw}"/>`; });
+    } else {
+      const div={serpentine:10,cturn:13,xturn:15,bed:10}[pattern]||10, gap=h/div;
+      for(let y=miny+gap*0.55; y<maxy; y+=gap){ routes+=`<line x1="${minx}" y1="${y.toFixed(1)}" x2="${maxx}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="${sw}"/>`; }
+    }
+    const terr = sat?`<filter id="${cid}t" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.04 0.06" numOctaves="2" seed="5" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.30, 0 0 0 0 0.36, 0 0 0 0 0.23, 0 0 0 0.42 0" result="t"/><feComposite in="t" in2="SourceGraphic" operator="atop"/></filter>`:'';
+    return `<svg viewBox="${vb}" preserveAspectRatio="xMidYMid slice" style="width:100%;height:260px;display:block;background:${sat?'#4A5B3E':'#EDEAE2'}">
+      <defs><clipPath id="${cid}"><polygon points="${ptsStr(poly)}"/></clipPath>${terr}</defs>
+      ${sat?`<rect x="${minx-pad}" y="${miny-pad}" width="${w+pad*2}" height="${h+pad*2}" fill="#55673F" filter="url(#${cid}t)"/>`:''}
+      <polygon points="${ptsStr(poly)}" fill="${sat?'rgba(120,150,90,.22)':'#E3EED9'}"/>
+      <g clip-path="url(#${cid})">${routes}</g>
+      <polygon points="${ptsStr(poly)}" fill="none" stroke="#5BE49B" stroke-width="${sw*1.2}" stroke-dasharray="${(sw*3).toFixed(1)} ${(sw*2).toFixed(1)}"/>
+      <g transform="translate(${aV[0]},${aV[1]})"><circle r="${(w*0.055).toFixed(1)}" fill="#0E9F5A" stroke="#fff" stroke-width="${(sw).toFixed(1)}"/><text y="${(w*0.02).toFixed(1)}" text-anchor="middle" font-size="${(w*0.07).toFixed(1)}" font-weight="800" fill="#fff" font-family="var(--font)">A</text></g>
+      <g transform="translate(${bV[0]},${bV[1]})"><circle r="${(w*0.055).toFixed(1)}" fill="#E5352C" stroke="#fff" stroke-width="${(sw).toFixed(1)}"/><text y="${(w*0.02).toFixed(1)}" text-anchor="middle" font-size="${(w*0.07).toFixed(1)}" font-weight="800" fill="#fff" font-family="var(--font)">B</text></g>
+    </svg>`;
+  },
   planCat(c){
     this._plCat=c;
     document.getElementById('plCat일반').classList.toggle('sel',c==='일반');
@@ -1328,11 +1454,7 @@ Views.work = {
           <span class="mono" style="font-size:9px;color:var(--ink-3)">6.2.2 · 6.4.1</span>
           <span class="chip chip-purple" style="margin-left:auto">${veh.model}</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-          <div class="field-row" style="margin:0"><label>작업 패턴</label><select><option>왕복 (U-turn 자동)</option><option>나선</option></select></div>
-          <div class="field-row" style="margin:0"><label>경심 깊이</label><input type="text" value="22 cm"></div>
-          <div class="field-row" style="margin:0"><label>작업 단수</label><input type="text" value="14 단"></div>
-        </div>
+        ${this.amSummaryHTML()}
         <small style="font-size:11px;color:var(--ink-2);display:block;margin-top:8px">${App.icon('map',11)} 경작지 경계(4.4) 기반 RTK 경로가 자동 생성됩니다 · 제어권 이전은 현장 App 전용(6.4.3)</small>
       </div>`:'';
     /* 과거 날짜 → 데이터 히스토리 불러오기 (6.3.2 연계) */
@@ -1363,7 +1485,8 @@ Views.work = {
     JOBS.push({ id:'JOB-'+(108+JOBS.length-7), name:`${f.name} ${type}`, cat:this._plCat, type,
       amotion:!!(veh&&veh.amotion), status:isPast?'done':'wait', field:fid, veh:vehId,
       prog:isPast?100:0, date:mmdd, area:f.area, team:this._plCat==='대행'?'배차 대기':null, hours:isPast?2.8:0, fuel:isPast?21:0,
-      states, state:(states[0]||{}).id||null });
+      states, state:(states[0]||{}).id||null,
+      amConfig:(veh&&veh.amotion)?{...(this._amConfig||this.amDefaults())}:null });
     /* 등록한 날짜(7월)를 캘린더에서 하이라이트 */
     this._justAddedDay = date.slice(0,7)==='2026-07' ? parseInt(date.slice(8,10),10) : null;
     App.closeModal();
