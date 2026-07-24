@@ -1319,7 +1319,7 @@ Views.work = {
     if(!this._amConfig) this._amConfig=this.amDefaults();
     const c=this._amConfig, pat=AM_PATTERNS.find(p=>p.id===c.pattern)||AM_PATTERNS[0];
     return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-sm btn-navy" onclick="Views.work.openRouteWizard()">${App.icon('route',13)} 작업 경로 설정</button>
+      <button class="btn btn-sm btn-navy" onclick="Views.work.openRouteWizard()">${App.icon('gear',13)} 작업 상세 설정</button>
       <span class="chip chip-purple">${pat.name}</span>
       <span style="font-size:11px;color:var(--ink-2)">기어 ${c.gear} · 경로간격 ${c.spacing}cm · 심도 ${c.depthAuto?'자동':'수동'} · 리프트 ${c.lift}%</span>
     </div>`;
@@ -1330,7 +1330,7 @@ Views.work = {
     if(!this._amConfig) this._amConfig=this.amDefaults();
     this._amConfig.field=v('plField');
     this._wizStep=1;
-    App.modal(`작업 경로 설정`, `<div id="wizBody"></div>`);
+    App.modal(`작업 상세 설정`, `<div id="wizBody"></div>`);
     this.renderWizard();
   },
   renderWizard(){ const box=document.getElementById('wizBody'); if(!box) return;
@@ -1407,8 +1407,12 @@ Views.work = {
     const f=FIELDS.find(x=>x.id===fieldId)||FIELDS[0], poly=f.poly;
     const xs=poly.map(p=>p[0]), ys=poly.map(p=>p[1]);
     const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
-    const w=maxx-minx,h=maxy-miny,pad=Math.max(w,h)*0.14;
-    const vb=`${minx-pad} ${miny-pad} ${w+pad*2} ${h+pad*2}`;
+    const w=maxx-minx,h=maxy-miny,pad=Math.max(w,h)*0.18;
+    /* 필지를 온전히 담는 와이드 지형 씬 viewBox (미리보기 잘림 방지) */
+    let bx=minx-pad, by=miny-pad, bw=w+pad*2, bh=h+pad*2; const target=1.9;
+    if(bw/bh < target){ const nw=bh*target; bx-=(nw-bw)/2; bw=nw; }
+    else { const nh=bw/target; by-=(nh-bh)/2; bh=nh; }
+    const vb=`${bx.toFixed(1)} ${by.toFixed(1)} ${bw.toFixed(1)} ${bh.toFixed(1)}`;
     const cid='rp'+fieldId.replace(/[^A-Za-z0-9]/g,'');
     const sat=base!=='map';
     const cx=xs.reduce((a,b)=>a+b,0)/xs.length, cy=ys.reduce((a,b)=>a+b,0)/ys.length;
@@ -1426,9 +1430,9 @@ Views.work = {
       for(let y=miny+gap*0.55; y<maxy; y+=gap){ routes+=`<line x1="${minx}" y1="${y.toFixed(1)}" x2="${maxx}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="${sw}"/>`; }
     }
     const terr = sat?`<filter id="${cid}t" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.04 0.06" numOctaves="2" seed="5" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.30, 0 0 0 0 0.36, 0 0 0 0 0.23, 0 0 0 0.42 0" result="t"/><feComposite in="t" in2="SourceGraphic" operator="atop"/></filter>`:'';
-    return `<svg viewBox="${vb}" preserveAspectRatio="xMidYMid slice" style="width:100%;height:260px;display:block;background:${sat?'#4A5B3E':'#EDEAE2'}">
+    return `<svg viewBox="${vb}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:280px;display:block;background:${sat?'#4A5B3E':'#EDEAE2'}">
       <defs><clipPath id="${cid}"><polygon points="${ptsStr(poly)}"/></clipPath>${terr}</defs>
-      ${sat?`<rect x="${minx-pad}" y="${miny-pad}" width="${w+pad*2}" height="${h+pad*2}" fill="#55673F" filter="url(#${cid}t)"/>`:''}
+      ${sat?`<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="#55673F" filter="url(#${cid}t)"/>`:''}
       <polygon points="${ptsStr(poly)}" fill="${sat?'rgba(120,150,90,.22)':'#E3EED9'}"/>
       <g clip-path="url(#${cid})">${routes}</g>
       <polygon points="${ptsStr(poly)}" fill="none" stroke="#5BE49B" stroke-width="${sw*1.2}" stroke-dasharray="${(sw*3).toFixed(1)} ${(sw*2).toFixed(1)}"/>
