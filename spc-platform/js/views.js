@@ -5,6 +5,14 @@ const Views = {};
 
 /* ---------- shared bits ---------- */
 function jobChip(st){ const [t,c]=JOB_STATUS[st]; return `<span class="chip chip-${c}"><span class="cd" style="background:currentColor"></span>${t}</span>`; }
+/* 커스텀 상태가 있으면 커스텀 상태 칩(색상 반영), 없으면 기본 매크로 상태 칩 */
+function jobStateChip(j){
+  if(j && j.states && j.state){
+    const s=j.states.find(x=>x.id===j.state);
+    if(s) return `<span class="chip" style="background:${s.color}1A;color:${s.color}"><span class="cd" style="background:${s.color}"></span>${s.name}</span>`;
+  }
+  return jobChip(j.status);
+}
 /* 대분류(일반/대행) + 작업유형(10종). A-Motion은 작업유형이 아니라 자율작업 특성 → 작업 상세에서 표기 */
 function typeChip(j){
   if(typeof j==='string') return `<span class="chip chip-gray">${j}</span>`;
@@ -61,7 +69,7 @@ Views.dashboard = {
           <div class="today-strip">
             ${todayJobs.map(j=>{ const f=FIELDS.find(x=>x.id===j.field);
               return `<div class="today-card" onclick="App.go('work',{tab:'status',job:'${j.id}'})">
-                <div style="display:flex;align-items:center;gap:6px">${typeChip(j)}${jobChip(j.status)}</div>
+                <div style="display:flex;align-items:center;gap:6px">${typeChip(j)}${jobStateChip(j)}</div>
                 <b>${j.name}</b><small>${f?f.name+' · ':''}${fmt(j.area)}평 · ${j.date}</small>
                 ${j.status==='run'?`<div class="prog" style="margin-top:9px"><i style="width:${j.prog}%"></i></div>`:''}
                 ${j.issue?`<small style="color:var(--red);font-weight:700;display:block;margin-top:6px">⚠ ${j.issue.split('—')[0]}</small>`:''}
@@ -903,7 +911,7 @@ Views.work = {
           <div class="kc-head"><span class="chip chip-${c}">${t}</span><span class="kc-n">${items.length}</span></div>
           ${items.map(j=>{const f=FIELDS.find(x=>x.id===j.field);
             return `<div class="kan-card" onclick="Views.work.jobDrawer('${j.id}')">
-              ${typeChip(j)}
+              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${typeChip(j)}${j.states&&j.state?jobStateChip(j):''}</div>
               <b>${j.name}</b>
               <div class="kk-meta"><span>${f?f.name:''}</span><span>${fmt(j.area)}평</span><span class="mono">${j.date}</span></div>
               ${j.status==='run'?`<div class="kk-foot"><div class="prog" style="flex:1"><i style="width:${j.prog}%"></i></div><b style="font-size:11px">${j.prog}%</b></div>`:''}
@@ -919,7 +927,7 @@ Views.work = {
           <td>${typeChip(j)}</td><td>${f?f.name:'-'}</td><td class="t-num">${fmt(j.area)}</td>
           <td style="font-size:12.5px">${v?v.model:'-'}</td>
           <td><div style="display:flex;align-items:center;gap:7px"><div class="prog ${j.status==='issue'?'red':''}" style="width:70px"><i style="width:${j.prog}%"></i></div><span style="font-size:11.5px;font-variant-numeric:tabular-nums">${j.prog}%</span></div></td>
-          <td>${jobChip(j.status)}</td>
+          <td>${jobStateChip(j)}</td>
           <td><button class="btn btn-sm btn-map" onclick='event.stopPropagation();App.go("map",{layers:["LY-02","LY-01"],focus:${JSON.stringify(j.field)}})'>${App.icon('map',13)} 맵</button></td>
         </tr>`;}).join('')}</tbody>
     </table></div>`}`;
@@ -932,21 +940,21 @@ Views.work = {
     App.rerender();
     this.jobDrawer(jid);
   },
-  /* 커스텀 상태 세그먼트 — 현재 상태의 '다음 상태'만 활성(플로우 준수) */
+  /* 커스텀 상태 세그먼트 — 어느 단계로든 자유 변경 (현재 제외 전부 선택 가능, 플로우 권장 다음은 → 표시) */
   customStateSeg(j){
     const byId={}; j.states.forEach(s=>byId[s.id]=s);
     const cur=byId[j.state]||j.states[0];
-    const allowed=new Set([...(cur.next||[])]);
+    const nextSet=new Set(cur.next||[]);
     return `<div style="display:flex;flex-wrap:wrap;gap:6px">
-      ${j.states.map(s=>{ const isCur=s.id===cur.id; const ok=allowed.has(s.id)&&!isCur;
-        return `<button ${ok?`onclick="Views.work.setCustomState('${j.id}','${s.id}')"`:'disabled'}
+      ${j.states.map(s=>{ const isCur=s.id===cur.id; const isNext=nextSet.has(s.id);
+        return `<button ${isCur?'disabled':`onclick="Views.work.setCustomState('${j.id}','${s.id}')"`}
           style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:700;
-            border:1.5px solid ${isCur?s.color:ok?'var(--line-2)':'var(--line)'};
-            ${isCur?`background:${s.color};color:#fff`:ok?'background:#fff;color:var(--ink-2);cursor:pointer':'background:var(--surface-2);color:var(--line-2);cursor:not-allowed'}">
-          <span style="width:8px;height:8px;border-radius:50%;background:${isCur?'#fff':s.color};opacity:${isCur||ok?1:.35}"></span>${s.name}${isCur?' · 현재':''}</button>`;
+            border:1.5px solid ${isCur?s.color:isNext?s.color:'var(--line-2)'};
+            ${isCur?`background:${s.color};color:#fff;cursor:default`:`background:${isNext?s.color+'14':'#fff'};color:var(--ink-2);cursor:pointer`}">
+          <span style="width:8px;height:8px;border-radius:50%;background:${isCur?'#fff':s.color}"></span>${s.name}${isCur?' · 현재':isNext?' →':''}</button>`;
       }).join('')}
     </div>
-    <div style="font-size:10.5px;color:var(--ink-3);margin-top:7px">${App.icon('info',10)} 현재 상태에서 이동 가능한 <b>다음 상태</b>만 선택할 수 있습니다 (플로우 준수)</div>`;
+    <div style="font-size:10.5px;color:var(--ink-3);margin-top:7px">${App.icon('info',10)} 이전 단계 포함 <b>어느 상태로든 자유롭게</b> 변경할 수 있습니다 · <b style="color:var(--ink-2)">→</b> 는 플로우상 권장 다음 단계</div>`;
   },
   setCustomState(jid, sid){
     const j=JOBS.find(x=>x.id===jid); if(!j) return;
@@ -962,7 +970,7 @@ Views.work = {
     const j=JOBS.find(x=>x.id===jid); if(!j) return;
     const f=FIELDS.find(x=>x.id===j.field), v=EQUIP.find(e=>e.id===j.veh);
     App.drawer(`작업 상세 — ${j.name}`,`
-      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">${typeChip(j)}${jobChip(j.status)}<span class="chip chip-gray mono">${j.id}</span></div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">${typeChip(j)}${jobStateChip(j)}<span class="chip chip-gray mono">${j.id}</span></div>
       <div style="background:var(--surface-2);border-radius:12px;padding:11px 14px;margin-bottom:14px">
         <div style="font-size:11.5px;font-weight:700;color:var(--ink-3);margin-bottom:7px">작업 상태 수동 변경${j.states&&j.states.length?` <span class="chip chip-purple" style="font-size:9px">커스텀 플로우 · ${j.states.length}단계</span>`:''}</div>
         ${j.states&&j.states.length? this.customStateSeg(j)
