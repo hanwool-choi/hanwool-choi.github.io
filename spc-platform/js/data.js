@@ -166,6 +166,25 @@ const JOBS = [
 ];
 const JOB_STATUS = { wait:['대기','gray'], run:['진행중','blue'], done:['완료','green'], issue:['이슈','red'] };
 
+/* ---------- 작업 상태 커스텀 (작업유형별 상태 플로우 템플릿) ----------
+   각 작업유형은 상태머신 템플릿을 가짐: states=[{id,name,color,next:[id…]}].
+   작업 등록 시 편집본이 job.states(스냅샷)+job.state(현재 상태)로 저장됨. */
+const STATE_PALETTE = ['#0E9F5A','#2E6BE6','#E5352C','#6E56CF','#DE9207','#1F9E8B','#E5352C','#EC4899','#8B94A3','#0EA5A5'];
+function defaultStateTemplate(){
+  return [
+    { id:'s_plan', name:'작업예정', color:'#0E9F5A', next:['s_done','s_stop','s_skip'] },
+    { id:'s_done', name:'작업완료', color:'#2E6BE6', next:[] },
+    { id:'s_stop', name:'작업중단', color:'#E5352C', next:['s_done','s_skip','s_stop'] },
+    { id:'s_skip', name:'작업제외', color:'#6E56CF', next:[] },
+  ];
+}
+const STATE_TEMPLATES = {};   /* 작업유형 → {name, states} (수정 시 유형별로 축적) */
+function stateTemplateFor(type){
+  if(!STATE_TEMPLATES[type]) STATE_TEMPLATES[type] = { name:type, states:defaultStateTemplate() };
+  return STATE_TEMPLATES[type];
+}
+function cloneStates(states){ return states.map(s=>({ id:s.id, name:s.name, color:s.color, next:[...(s.next||[])] })); }
+
 /* ---------- 농작업 대행 (Figma '관리자 web 대행단 매칭 26.06.22' 기반, 농가→필지 흐름) ---------- */
 const CONTRACT = {
   id:'CT-2026-031', title:'2026년 봄 논 통합 대행 공고', period:'모집 2026.03.01 ~ 2026.05.31',

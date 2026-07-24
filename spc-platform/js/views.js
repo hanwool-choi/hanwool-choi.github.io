@@ -932,16 +932,43 @@ Views.work = {
     App.rerender();
     this.jobDrawer(jid);
   },
+  /* 커스텀 상태 세그먼트 — 현재 상태의 '다음 상태'만 활성(플로우 준수) */
+  customStateSeg(j){
+    const byId={}; j.states.forEach(s=>byId[s.id]=s);
+    const cur=byId[j.state]||j.states[0];
+    const allowed=new Set([...(cur.next||[])]);
+    return `<div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${j.states.map(s=>{ const isCur=s.id===cur.id; const ok=allowed.has(s.id)&&!isCur;
+        return `<button ${ok?`onclick="Views.work.setCustomState('${j.id}','${s.id}')"`:'disabled'}
+          style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;font-size:12px;font-weight:700;
+            border:1.5px solid ${isCur?s.color:ok?'var(--line-2)':'var(--line)'};
+            ${isCur?`background:${s.color};color:#fff`:ok?'background:#fff;color:var(--ink-2);cursor:pointer':'background:var(--surface-2);color:var(--line-2);cursor:not-allowed'}">
+          <span style="width:8px;height:8px;border-radius:50%;background:${isCur?'#fff':s.color};opacity:${isCur||ok?1:.35}"></span>${s.name}${isCur?' · 현재':''}</button>`;
+      }).join('')}
+    </div>
+    <div style="font-size:10.5px;color:var(--ink-3);margin-top:7px">${App.icon('info',10)} 현재 상태에서 이동 가능한 <b>다음 상태</b>만 선택할 수 있습니다 (플로우 준수)</div>`;
+  },
+  setCustomState(jid, sid){
+    const j=JOBS.find(x=>x.id===jid); if(!j) return;
+    j.state=sid;
+    const s=(j.states||[]).find(x=>x.id===sid);
+    /* 매크로 상태(보드용)도 상태명에 따라 동기화 */
+    if(s){ const nm=s.name; if(/완료/.test(nm)) j.status='done'; else if(/제외|중단/.test(nm)) j.status='issue'; else if(/예정|대기/.test(nm)) j.status='wait'; else j.status='run'; }
+    App.toast(`'${j.name}' 상태 변경 → ${s?s.name:sid}`);
+    App.rerender();
+    this.jobDrawer(jid);
+  },
   jobDrawer(jid){
     const j=JOBS.find(x=>x.id===jid); if(!j) return;
     const f=FIELDS.find(x=>x.id===j.field), v=EQUIP.find(e=>e.id===j.veh);
     App.drawer(`작업 상세 — ${j.name}`,`
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">${typeChip(j)}${jobChip(j.status)}<span class="chip chip-gray mono">${j.id}</span></div>
       <div style="background:var(--surface-2);border-radius:12px;padding:11px 14px;margin-bottom:14px">
-        <div style="font-size:11.5px;font-weight:700;color:var(--ink-3);margin-bottom:7px">작업 상태 수동 변경</div>
-        <div class="seg" style="width:100%;display:flex">
+        <div style="font-size:11.5px;font-weight:700;color:var(--ink-3);margin-bottom:7px">작업 상태 수동 변경${j.states&&j.states.length?` <span class="chip chip-purple" style="font-size:9px">커스텀 플로우 · ${j.states.length}단계</span>`:''}</div>
+        ${j.states&&j.states.length? this.customStateSeg(j)
+        : `<div class="seg" style="width:100%;display:flex">
           ${Object.entries(JOB_STATUS).map(([k,[t]])=>`<button style="flex:1" class="${j.status===k?'active':''}" onclick="Views.work.setStatus('${jid}','${k}')">${t}</button>`).join('')}
-        </div>
+        </div>`}
       </div>
       ${j.status==='run'?`<div style="background:var(--surface-2);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:7px"><b>실시간 진행률</b><b style="color:var(--blue)">${j.prog}%</b></div>
@@ -1088,7 +1115,7 @@ Views.work = {
   },
 
   /* ---- 6.2.1 작업 계획 추가 (일정·유형·작업자·장비·작업기 → 캘린더 등록, 과거 작업은 히스토리 불러오기) ---- */
-  planModal(preDate){
+  planModal(preDate, draft){
     App.modal(`작업 계획 추가`, `
       <div style="padding:22px 26px">
         <div class="grid cols-2" style="gap:12px">
@@ -1098,7 +1125,7 @@ Views.work = {
               <div class="radio-tile sel" id="plCat일반" style="padding:9px;text-align:center" onclick="Views.work.planCat('일반')"><b style="font-size:12.5px">일반</b></div>
               <div class="radio-tile" id="plCat대행" style="padding:9px;text-align:center" onclick="Views.work.planCat('대행')"><b style="font-size:12.5px">대행</b></div>
             </div></div>
-          <div class="field-row"><label>작업 유형</label><select id="plType">${WORKTYPES.map(w=>`<option>${w}</option>`).join('')}</select></div>
+          <div class="field-row"><label>작업 유형</label><select id="plType" onchange="Views.work.onTypeChange()">${WORKTYPES.map(w=>`<option>${w}</option>`).join('')}</select></div>
           <div class="field-row"><label>필지</label><select id="plField">${FIELDS.map(f=>`<option value="${f.id}">${f.name} (${f.id}) · ${fmt(f.area)}평</option>`).join('')}</select></div>
           <div class="field-row"><label>작업자</label><input type="text" id="plWorker" value="${App.role.name}"></div>
           <div class="field-row"><label>장비</label><select id="plVeh" onchange="Views.work.planSync()">
@@ -1110,6 +1137,7 @@ Views.work = {
             ${IMPLEMENTS.map(im=>`<option>${im.name} (${im.type}${im.smart?' · ISOBUS':''})</option>`).join('')}
           </select></div>
         </div>
+        <div id="plCustom" style="margin-top:4px"></div>
         <div id="plAmotion"></div>
         <div id="plPast"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
@@ -1118,7 +1146,161 @@ Views.work = {
         </div>
       </div>`);
     this._plCat='일반';
+    this.onTypeChange();
     this.planSync();
+    if(draft){
+      const set=(id,v)=>{const el=document.getElementById(id); if(el&&v!=null&&v!=='') el.value=v;};
+      set('plDate',draft.date); set('plType',draft.type); set('plField',draft.field);
+      set('plWorker',draft.worker); set('plVeh',draft.veh); set('plImpl',draft.impl);
+      this.planCat(draft.cat||'일반');
+      this.onTypeChange();
+      this.planSync();
+      this._planDraft=null;
+    }
+  },
+  /* 작업 유형 선택 시 — 해당 유형의 상태 템플릿을 로드하고 [작업 상태 커스텀] 버튼 표출 */
+  onTypeChange(){
+    const type=(document.getElementById('plType')||{}).value; if(!type) return;
+    const tpl=stateTemplateFor(type);
+    this._planStates=cloneStates(tpl.states);
+    this._planTemplateName=tpl.name||type;
+    this.renderCustomBtn();
+  },
+  renderCustomBtn(){
+    const box=document.getElementById('plCustom'); if(!box) return;
+    const n=(this._planStates||[]).length;
+    box.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:11px 14px">
+        <div class="lr-swatch" style="background:var(--purple);width:30px;height:30px;border-radius:9px;flex-shrink:0">${App.icon('gear',15)}</div>
+        <div style="flex:1;min-width:0"><b style="font-size:12.5px">작업 상태 플로우</b>
+          <div style="font-size:11px;color:var(--ink-3)">${this._planTemplateName} · 상태 ${n}개 <span style="color:var(--ink-3)">— 등록 작업의 상태 변경에 적용됩니다</span></div></div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          ${(this._planStates||[]).slice(0,5).map(s=>`<span style="width:11px;height:11px;border-radius:50%;background:${s.color};border:1.5px solid #fff;box-shadow:0 0 0 1px var(--line-2)" title="${s.name}"></span>`).join('')}
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="Views.work.openStateEditor()" style="flex-shrink:0">${App.icon('gear',13)} 작업 상태 커스텀</button>
+      </div>`;
+  },
+
+  /* ===== 작업 상태 커스텀 — 상태 플로우 편집기 ===== */
+  _editStates:null, _editName:'', _editType:'', _colorOpen:null, _nextOpen:null, _dragI:null, _planDraft:null,
+  openStateEditor(){
+    /* 현재 작업 계획 폼 값을 보존(편집기 종료 후 복원) */
+    const v=id=>{const el=document.getElementById(id);return el?el.value:'';};
+    this._planDraft={ date:v('plDate'), cat:this._plCat, type:v('plType'), field:v('plField'), worker:v('plWorker'), veh:v('plVeh'), impl:v('plImpl') };
+    this._editType=v('plType');
+    this._editStates=cloneStates(this._planStates||stateTemplateFor(this._editType).states);
+    this._editName=this._planTemplateName||this._editType;
+    this._colorOpen=null; this._nextOpen=null;
+    App.modal(`작업 상태 커스텀`, `<div id="seBody"></div>`);
+    this.renderStateEditor();
+  },
+  renderStateEditor(){
+    const box=document.getElementById('seBody'); if(!box) return;
+    const states=this._editStates, byId={}; states.forEach(s=>byId[s.id]=s);
+    box.innerHTML=`
+      <div style="padding:20px 24px;max-height:70vh;overflow-y:auto">
+        <div class="field-row"><label>템플릿 이름</label><input id="tplName" value="${this._editName}" onchange="Views.work.editName(this.value)"></div>
+        <div style="display:flex;align-items:center;margin:16px 0 8px"><b style="font-size:14px">작업 상태 관리</b>
+          <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="Views.work.addState()">${App.icon('plus',13)} 상태 추가</button></div>
+        <div class="tbl-wrap"><table class="tbl" style="table-layout:auto">
+          <thead><tr><th style="width:40%">상태</th><th style="width:56px">색상</th><th>다음 상태</th><th style="width:44px"></th></tr></thead>
+          <tbody>${states.map((s,i)=>{
+            const mainRow=`<tr draggable="true" style="cursor:default"
+                ondragstart="Views.work._dragI=${i}" ondragover="event.preventDefault()" ondrop="Views.work.dropState(${i})">
+              <td><div style="display:flex;align-items:center;gap:8px">
+                <span style="cursor:grab;color:var(--ink-3);font-size:14px;user-select:none" title="드래그하여 순서 변경">⠿</span>
+                <input value="${s.name.replace(/"/g,'&quot;')}" onchange="Views.work.editStateName('${s.id}',this.value)"
+                  style="border:1px solid transparent;background:none;font-size:13px;font-weight:600;outline:none;border-radius:6px;padding:4px 6px;min-width:70px;max-width:150px"
+                  onfocus="this.style.borderColor='var(--line-2)'" onblur="this.style.borderColor='transparent'"></div></td>
+              <td><span onclick="Views.work.toggleColorPicker('${s.id}')" style="width:16px;height:16px;border-radius:50%;background:${s.color};display:inline-block;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px ${this._colorOpen===s.id?'var(--ink)':'var(--line-2)'}"></span></td>
+              <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                ${(s.next||[]).map(nid=>byId[nid]?`<span class="chip chip-gray" style="font-size:10.5px">${byId[nid].name}${nid===s.id?' ↻':''}</span>`:'').join('')||'<span style="font-size:11px;color:var(--ink-3)">종료 상태</span>'}
+                <button onclick="Views.work.toggleNextPicker('${s.id}')" style="width:26px;height:24px;border-radius:7px;display:grid;place-items:center;color:${this._nextOpen===s.id?'var(--red)':'var(--ink-3)'};border:1px solid ${this._nextOpen===s.id?'var(--red)':'var(--line-2)'}" title="다음 상태(화살표) 설정">${App.icon('edit',13)}</button>
+              </div></td>
+              <td><button onclick="Views.work.deleteState('${s.id}')" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink-3)" title="상태 삭제" onmouseover="this.style.background='var(--red-soft)';this.style.color='var(--red)'" onmouseout="this.style.background='';this.style.color='var(--ink-3)'">${App.icon('x',15)}</button></td>
+            </tr>`;
+            const colorRow=this._colorOpen===s.id?`<tr><td colspan="4" style="background:var(--surface-2);padding:10px 14px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;font-weight:700;color:var(--ink-3)">색상 선택</span>
+              ${STATE_PALETTE.map(c=>`<span onclick="Views.work.setStateColor('${s.id}','${c}')" style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;border:2px solid ${c.toLowerCase()===s.color.toLowerCase()?'var(--ink)':'#fff'};box-shadow:0 0 0 1px var(--line-2)"></span>`).join('')}</div></td></tr>`:'';
+            const nextRow=this._nextOpen===s.id?`<tr><td colspan="4" style="background:var(--surface-2);padding:10px 14px">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;font-weight:700;color:var(--ink-3)">→ 이동 가능한 다음 상태</span>
+              ${states.map(o=>{const on=(s.next||[]).includes(o.id);return `<span onclick="Views.work.toggleNext('${s.id}','${o.id}')" class="chip ${on?'chip-blue':'chip-gray'}" style="cursor:pointer;font-size:10.5px">${on?'✓ ':''}${o.name}${o.id===s.id?' (자기)':''}</span>`;}).join('')}</div></td></tr>`:'';
+            return mainRow+colorRow+nextRow;
+          }).join('')}</tbody>
+        </table></div>
+        <div style="border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:16px;background:var(--surface-2)">
+          <div style="font-size:11px;font-weight:700;color:var(--ink-3);margin-bottom:6px">상태 플로우 미리보기</div>
+          ${this.stateFlowSVG(states)}
+        </div>
+      </div>
+      <div style="padding:14px 24px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="Views.work.cancelEditor()">취소</button>
+        <button class="btn btn-primary" onclick="Views.work.saveTemplate()">${App.icon('check')} 저장</button>
+      </div>`;
+  },
+  editName(v){ this._editName=v; },
+  editStateName(id,v){ const s=this._editStates.find(x=>x.id===id); if(s){ s.name=v.trim()||s.name; } this.renderStateEditor(); },
+  toggleColorPicker(id){ this._colorOpen=this._colorOpen===id?null:id; this._nextOpen=null; this.renderStateEditor(); },
+  setStateColor(id,c){ const s=this._editStates.find(x=>x.id===id); if(s) s.color=c; this._colorOpen=null; this.renderStateEditor(); },
+  toggleNextPicker(id){ this._nextOpen=this._nextOpen===id?null:id; this._colorOpen=null; this.renderStateEditor(); },
+  toggleNext(id,nid){ const s=this._editStates.find(x=>x.id===id); if(!s) return; s.next=s.next||[];
+    const i=s.next.indexOf(nid); if(i>=0) s.next.splice(i,1); else s.next.push(nid); this.renderStateEditor(); },
+  addState(){ const n=this._editStates.length+1; const id='s_'+Date.now().toString(36)+n;
+    this._editStates.push({ id, name:'새 상태', color:STATE_PALETTE[(n-1)%STATE_PALETTE.length], next:[] }); this.renderStateEditor(); },
+  deleteState(id){ this._editStates=this._editStates.filter(s=>s.id!==id);
+    this._editStates.forEach(s=>{ s.next=(s.next||[]).filter(n=>n!==id); }); this._colorOpen=this._nextOpen=null; this.renderStateEditor(); },
+  dropState(i){ const from=this._dragI; if(from==null||from===i) return; const arr=this._editStates;
+    const [moved]=arr.splice(from,1); arr.splice(i,0,moved); this._dragI=null; this.renderStateEditor(); },
+  cancelEditor(){ App.closeModal(); this.reopenPlan(); },
+  saveTemplate(){
+    const name=(document.getElementById('tplName')||{}).value||this._editName;
+    this._planStates=cloneStates(this._editStates);
+    this._planTemplateName=name;
+    if(this._editType){ STATE_TEMPLATES[this._editType]={ name, states:cloneStates(this._editStates) }; }
+    App.closeModal(); App.toast(`'${name}' 상태 플로우가 저장되었습니다`);
+    this.reopenPlan(true);
+  },
+  reopenPlan(saved){
+    const d=this._planDraft; if(!d){ return; }
+    this.planModal(d.date, d);
+  },
+  /* 상태 플로우 다이어그램 (자동 계층 배치 SVG) */
+  stateFlowSVG(states){
+    if(!states.length) return '<div style="text-align:center;color:var(--ink-3);padding:24px;font-size:12px">상태를 추가하세요</div>';
+    const byId={}; states.forEach(s=>byId[s.id]=s);
+    const layer={}; states.forEach(s=>layer[s.id]=0);
+    for(let it=0; it<states.length; it++){ let ch=false;
+      states.forEach(s=>(s.next||[]).forEach(nid=>{ if(byId[nid]&&nid!==s.id&&layer[nid]<layer[s.id]+1){ layer[nid]=Math.min(states.length-1,layer[s.id]+1); ch=true; } }));
+      if(!ch) break; }
+    const layers={}; states.forEach(s=>{ (layers[layer[s.id]]=layers[layer[s.id]]||[]).push(s); });
+    const maxL=Math.max(...states.map(s=>layer[s.id]));
+    const colW=168, rowH=74, nodeH=34, padX=26, padY=40;
+    const nodeW=s=>Math.max(64, s.name.length*15+20);
+    let maxRows=1; for(let L=0;L<=maxL;L++) maxRows=Math.max(maxRows,(layers[L]||[]).length);
+    const pos={};
+    for(let L=0;L<=maxL;L++){ const col=layers[L]||[]; const off=(maxRows-col.length)/2;
+      col.forEach((s,ri)=>{ pos[s.id]={ x:padX+L*colW, y:padY+(off+ri)*rowH+nodeH/2 }; }); }
+    const W=padX*2 + maxL*colW + nodeW(states[states.length-1]) + 20;
+    const H=padY*2 + maxRows*rowH;
+    let edges='';
+    states.forEach(s=>(s.next||[]).forEach(nid=>{ const t=byId[nid]; if(!t) return;
+      const a=pos[s.id], b=pos[nid], aw=nodeW(s), bw=nodeW(t);
+      if(nid===s.id){ const cx=a.x+aw/2, ty=a.y-nodeH/2;
+        edges+=`<path d="M ${cx+7} ${ty} C ${cx+46} ${ty-32}, ${cx-46} ${ty-32}, ${cx-7} ${ty}" fill="none" stroke="#9AA3AF" stroke-width="1.4" marker-end="url(#sfArrow)"/>`; return; }
+      if(b.x>a.x){ const x1=a.x+aw, y1=a.y, x2=b.x, y2=b.y, mx=(x1+x2)/2;
+        edges+=`<path d="M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" fill="none" stroke="#9AA3AF" stroke-width="1.4" marker-end="url(#sfArrow)"/>`;
+      } else { const x1=a.x+aw/2, y1=a.y+nodeH/2, x2=b.x+bw/2, y2=b.y+nodeH/2, dip=Math.max(y1,y2)+40;
+        edges+=`<path d="M ${x1} ${y1} C ${x1} ${dip}, ${x2} ${dip}, ${x2} ${y2}" fill="none" stroke="#9AA3AF" stroke-width="1.3" marker-end="url(#sfArrow)"/>`;
+      }
+    }));
+    let nodes='';
+    states.forEach(s=>{ const p=pos[s.id], w=nodeW(s);
+      nodes+=`<g><rect x="${p.x}" y="${p.y-nodeH/2}" width="${w}" height="${nodeH}" rx="8" fill="#EDE9FB" stroke="#C7BCF2" stroke-width="1.4"/>
+        <rect x="${p.x}" y="${p.y-nodeH/2}" width="4" height="${nodeH}" rx="2" fill="${s.color}"/>
+        <text x="${p.x+w/2+2}" y="${p.y+4}" text-anchor="middle" font-size="12" font-weight="700" fill="#3A3550" font-family="var(--font)">${s.name}</text></g>`; });
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:260px;display:block">
+      <defs><marker id="sfArrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0 0 L7 3 L0 6 Z" fill="#9AA3AF"/></marker></defs>
+      ${edges}${nodes}</svg>`;
   },
   planCat(c){
     this._plCat=c;
@@ -1168,9 +1350,12 @@ Views.work = {
     const veh=EQUIP.find(e=>e.id===vehId);
     const isPast=date<DEMO_TODAY.iso;
     const mmdd=date.slice(5).replace('-','.');
+    /* 커스텀 상태 플로우 스냅샷 — 등록 작업의 상태 수동 변경에 적용 */
+    const states=cloneStates(this._planStates||stateTemplateFor(type).states);
     JOBS.push({ id:'JOB-'+(108+JOBS.length-7), name:`${f.name} ${type}`, cat:this._plCat, type,
       amotion:!!(veh&&veh.amotion), status:isPast?'done':'wait', field:fid, veh:vehId,
-      prog:isPast?100:0, date:mmdd, area:f.area, team:this._plCat==='대행'?'배차 대기':null, hours:isPast?2.8:0, fuel:isPast?21:0 });
+      prog:isPast?100:0, date:mmdd, area:f.area, team:this._plCat==='대행'?'배차 대기':null, hours:isPast?2.8:0, fuel:isPast?21:0,
+      states, state:(states[0]||{}).id||null });
     /* 등록한 날짜(7월)를 캘린더에서 하이라이트 */
     this._justAddedDay = date.slice(0,7)==='2026-07' ? parseInt(date.slice(8,10),10) : null;
     App.closeModal();
